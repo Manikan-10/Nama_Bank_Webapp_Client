@@ -1,0 +1,339 @@
+/* ================================
+   Landing Page Styles - Enhanced
+   ================================ */
+
+.landing-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-6);
+    position: relative;
+    overflow: hidden;
+    animation: pageSlideIn 0.6s ease-out;
+}
+
+@keyframes pageSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.landing-container {
+    width: 100%;
+    max-width: 800px;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+}
+
+/* Header with animation */
+.landing-header {
+    margin-bottom: var(--space-10);
+    animation: headerFadeIn 0.8s ease-out 0.2s both;
+}
+
+@keyframes headerFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.landing-header .om-symbol {
+    font-size: 4rem;
+    margin-bottom: var(--space-4);
+    animation: omPulse 3s ease-in-out infinite;
+}
+
+@keyframes omPulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        text-shadow: 0 0 10px rgba(255, 153, 51, 0.3);
+    }
+
+    50% {
+        transform: scale(1.05);
+        text-shadow: 0 0 25px rgba(255, 153, 51, 0.5);
+    }
+}
+
+.landing-title {
+    font-size: clamp(2.5rem, 6vw, 3.5rem);
+    font-family: var(--font-display);
+    color: var(--maroon);
+    margin-bottom: var(--space-4);
+    letter-spacing: -0.02em;
+}
+
+.landing-subtitle {
+    font-size: var(--text-lg);
+    color: var(--gray-600);
+    max-width: 480px;
+    margin: 0 auto;
+    line-height: 1.7;
+}
+
+/* Intro Section - About Nama Bank */
+.intro-section {
+    margin-bottom: var(--space-10);
+    animation: cardSlideUp 0.6s ease-out 0.25s both;
+}
+
+.intro-card {
+    background: linear-gradient(135deg, var(--cream) 0%, var(--white) 100%);
+    border-radius: var(--radius-2xl);
+    border: 1px solid var(--saffron-light);
+    padding: var(--space-8);
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(255, 153, 51, 0.1);
+}
+
+.intro-greeting {
+    font-family: var(--font-display);
+    font-size: clamp(1.25rem, 3vw, 1.75rem);
+    color: var(--maroon);
+    margin-bottom: var(--space-6);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.intro-content {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.intro-content p {
+    font-size: var(--text-base);
+    color: var(--gray-700);
+    line-height: 1.8;
+    margin-bottom: var(--space-3);
+}
+
+.intro-content p:last-child {
+    margin-bottom: 0;
+}
+
+.intro-content strong {
+    color: var(--saffron-dark);
+}
+
+/* Cards Grid with staggered animation */
+.landing-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--space-6);
+    margin-bottom: var(--space-8);
+}
+
+.landing-card {
+    background: var(--white);
+    border-radius: var(--radius-2xl);
+    border: 1px solid var(--gray-200);
+    padding: var(--space-8);
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    text-align: left;
+    animation: cardSlideUp 0.6s ease-out both;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+.landing-card:nth-child(1) {
+    animation-delay: 0.3s;
+}
+
+.landing-card:nth-child(2) {
+    animation-delay: 0.45s;
+}
+
+@keyframes cardSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(40px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.landing-card:hover {
+    border-color: var(--saffron);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+}
+
+.landing-card:hover .card-icon-wrapper {
+    background: var(--gradient-primary);
+    color: var(--white);
+}
+
+.landing-card:hover .card-action {
+    color: var(--saffron-dark);
+}
+
+.card-icon-wrapper {
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--cream);
+    border-radius: var(--radius-xl);
+    color: var(--saffron-dark);
+    margin-bottom: var(--space-5);
+    transition: all var(--transition-base);
+}
+
+.landing-card .card-title {
+    font-size: var(--text-xl);
+    font-family: var(--font-primary);
+    font-weight: 600;
+    color: var(--gray-900);
+    margin-bottom: var(--space-2);
+}
+
+.card-description {
+    color: var(--gray-500);
+    margin-bottom: var(--space-4);
+    line-height: 1.6;
+    font-size: var(--text-base);
+}
+
+.card-action {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: 600;
+    color: var(--gray-700);
+    transition: color var(--transition-fast);
+    font-size: var(--text-sm);
+}
+
+/* Admin Section - Enhanced */
+.admin-section {
+    margin-top: var(--space-8);
+    animation: cardSlideUp 0.6s ease-out 0.6s both;
+    display: flex;
+    justify-content: center;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+}
+
+.admin-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3);
+    color: var(--gray-700);
+    font-size: var(--text-base);
+    font-weight: 500;
+    padding: var(--space-4) var(--space-6);
+    border-radius: var(--radius-xl);
+    transition: all var(--transition-base);
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.admin-link svg {
+    color: var(--saffron);
+    width: 20px;
+    height: 20px;
+}
+
+.admin-link:hover {
+    color: var(--maroon);
+    background: var(--cream);
+    border-color: var(--saffron);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* Footer */
+.landing-footer {
+    margin-top: var(--space-12);
+}
+
+.quote-wrapper {
+    padding: var(--space-6);
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--gray-100);
+}
+
+.quote {
+    font-family: var(--font-display);
+    font-style: italic;
+    color: var(--gray-500);
+    font-size: var(--text-base);
+    margin: 0;
+    line-height: 1.8;
+}
+
+/* Decorative Elements */
+.decoration {
+    position: fixed;
+    border-radius: 50%;
+    background: var(--gradient-primary);
+    opacity: 0.08;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.decoration-1 {
+    width: 500px;
+    height: 500px;
+    top: -200px;
+    right: -150px;
+}
+
+.decoration-2 {
+    width: 400px;
+    height: 400px;
+    bottom: -100px;
+    left: -150px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .landing-page {
+        padding: var(--space-4);
+        align-items: flex-start;
+        padding-top: var(--space-8);
+    }
+
+    .landing-header {
+        margin-bottom: var(--space-8);
+    }
+
+    .landing-header .om-symbol {
+        font-size: 3rem;
+    }
+
+    .landing-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .landing-card {
+        padding: var(--space-6);
+    }
+
+    .quote-wrapper {
+        padding: var(--space-4);
+    }
+}
