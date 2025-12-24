@@ -25,10 +25,21 @@ export const getAllNamaAccounts = async () => {
     return data || [];
 };
 
-export const createNamaAccount = async (name) => {
+export const createNamaAccount = async (name, start_date = null, end_date = null, target_goal = null) => {
+    // Build insert object - only include date/target fields if the columns exist in DB
+    const insertData = {
+        name,
+        is_active: true
+    };
+
+    // Only add new fields if they have values (allows working before migration is run)
+    if (start_date) insertData.start_date = start_date;
+    if (end_date) insertData.end_date = end_date;
+    if (target_goal) insertData.target_goal = parseInt(target_goal) || null;
+
     const { data, error } = await supabase
         .from('nama_accounts')
-        .insert({ name, is_active: true })
+        .insert(insertData)
         .select()
         .single();
 
@@ -279,4 +290,310 @@ export const getAccountStats = async () => {
     });
 
     return accountStats;
+};
+
+// ============================================
+// User Account Links Service
+// ============================================
+
+export const getUserAccountLinks = async (userId) => {
+    const { data, error } = await supabase
+        .from('user_account_links')
+        .select(`
+            account_id,
+            nama_accounts (
+                id,
+                name,
+                is_active
+            )
+        `)
+        .eq('user_id', userId);
+
+    if (error) throw error;
+    return data || [];
+};
+
+export const linkUserToAccount = async (userId, accountId) => {
+    const { data, error } = await supabase
+        .from('user_account_links')
+        .insert({ user_id: userId, account_id: accountId })
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+};
+
+export const linkUserToAccounts = async (userId, accountIds) => {
+    const insertData = accountIds.map(accountId => ({
+        user_id: userId,
+        account_id: accountId
+    }));
+
+    const { data, error } = await supabase
+        .from('user_account_links')
+        .insert(insertData)
+        .select();
+
+    if (error) throw error;
+    return data;
+};
+
+export const unlinkUserFromAccount = async (userId, accountId) => {
+    const { error } = await supabase
+        .from('user_account_links')
+        .delete()
+        .eq('user_id', userId)
+        .eq('account_id', accountId);
+
+    if (error) throw error;
+};
+
+// ============================================
+// Bulk User Creation Service
+// ============================================
+
+export const bulkCreateUsers = async (users, defaultAccountIds = []) => {
+    const results = [];
+    const errors = [];
+
+    for (const userData of users) {
+        try {
+            // Create user
+            const { data: newUser, error: userError } = await supabase
+                .from('users')
+                .insert({
+                    name: userData.name,
+                    whatsapp: userData.whatsapp,
+                    password_hash: userData.password, // Note: should be hashed
+                    city: userData.city || null,
+                    state: userData.state || null,
+                    country: userData.country || null,
+                    is_active: true
+                })
+                .select()
+                .single();
+
+            if (userError) {
+                errors.push({ user: userData, error: userError.message });
+                continue;
+            }
+
+            // Link to accounts if specified
+            const accountsToLink = userData.accountIds || defaultAccountIds;
+            if (accountsToLink.length > 0) {
+                await linkUserToAccounts(newUser.id, accountsToLink);
+            }
+
+            results.push(newUser);
+        } catch (err) {
+            errors.push({ user: userData, error: err.message });
+        }
+    }
+
+    return { results, errors };
+};
+
+// ============================================
+// Prayer Service
+// ============================================
+
+export const submitPrayer = async (prayerData) => {
+    const { data, error } = await supabase
+        .from('prayers')
+        .insert({
+            name: prayerData.name,
+            email: prayerData.email,
+            phone: prayerData.phone || null,
+            privacy: prayerData.privacy || 'public',
+            prayer_text: prayerData.prayer_text,
+            email_notifications: prayerData.email_notifications || false,
+            status: 'pending'
+        })
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+};
+
+export const getApprovedPrayers = async () => {
+    const { data, error } = await supabase
+        .from('prayers')
+        .select('*')
+        .eq('status', 'approved')
+        .order('approved_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+};
+
+export const getPendingPrayers = async () => {
+    const { data, error } = await supabase
+        .from('prayers')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+};
+
+export const getAllPrayers = async () => {
+    const { data, error } = await supabase
+        .from('prayers')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+};
+
+export const approvePrayer = async (id, moderatorId = null) => {
+    const { data, error } = await supabase
+        .from('prayers')
+        .update({
+            status: 'approved',
+            approved_at: new Date().toISOString(),
+            approved_by: moderatorId
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+};
+
+export const rejectPrayer = async (id) => {
+    const { data, error } = await supabase
+        .from('prayers')
+        .update({ status: 'rejected' })
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+};
+
+export const incrementPrayerCount = async (id) => {
+    // Use RPC for atomic increment, or fetch-update pattern
+    const { data: prayer, error: fetchError } = await supabase
+        .from('prayers')
+        .select('prayer_count')
+        .eq('id', id)
+        .single();
+
+    if (fetchError) throw fetchError;
+
+    const { data, error } = await supabase
+        .from('prayers')
+        .update({ prayer_count: (prayer.prayer_count || 0) + 1 })
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+};
+
+// ============================================
+// Book Shelf Service
+// ============================================
+
+export const uploadBook = async (file, metadata) => {
+    // 1. Upload file to 'books' bucket
+    // Sanitize filename: replace spaces with underscores, keep alphanumeric + common chars
+    const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const fileName = `${Date.now()}_${sanitizedName}`;
+    const filePath = `${fileName}`; // Uploading to root of books bucket
+
+    const { error: uploadError } = await supabase.storage
+        .from('library')
+        .upload(filePath, file, {
+            upsert: true
+        });
+
+    if (uploadError) throw uploadError;
+
+    // 2. Get Public URL
+    const { data: { publicUrl } } = supabase.storage
+        .from('library')
+        .getPublicUrl(filePath);
+
+    // 3. Insert into books table
+    const { data, error } = await supabase
+        .from('books')
+        .insert({
+            ...metadata,
+            file_url: publicUrl
+        })
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+};
+
+export const getBooks = async (filters = {}) => {
+    let query = supabase
+        .from('books')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    // Apply filters if they exist
+    if (filters.year) query = query.eq('year', filters.year);
+    if (filters.month) query = query.eq('month', filters.month);
+    if (filters.country) query = query.eq('country', filters.country);
+    if (filters.city) query = query.eq('city', filters.city);
+    if (filters.language) query = query.eq('language', filters.language);
+    if (filters.edition_type) query = query.eq('edition_type', filters.edition_type);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+};
+
+export const getMostViewedBooks = async (limit = 5) => {
+    const { data, error } = await supabase
+        .from('books')
+        .select('*')
+        .order('view_count', { ascending: false })
+        .limit(limit);
+
+    if (error) throw error;
+    return data;
+};
+
+export const incrementBookView = async (bookId) => {
+    const { data, error } = await supabase.rpc('increment_book_view', { book_id: bookId });
+    if (error) {
+        console.error('Error incrementing view:', error);
+        // Fallback or ignore
+    }
+    return data;
+};
+
+export const deleteBook = async (bookId, fileUrl) => {
+    // 1. Delete from DB
+    const { error: dbError } = await supabase
+        .from('books')
+        .delete()
+        .eq('id', bookId);
+
+    if (dbError) throw dbError;
+
+    // 2. Delete from Storage (Optional but recommended)
+    if (fileUrl) {
+        try {
+            // Extract path from URL. URL: .../storage/v1/object/public/library/filename.pdf
+            const path = fileUrl.split('library/').pop();
+            if (path) {
+                await supabase.storage.from('library').remove([path]);
+            }
+        } catch (err) {
+            console.error('Error deleting file from storage:', err);
+        }
+    }
 };

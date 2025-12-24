@@ -131,6 +131,69 @@
     color: var(--saffron-dark);
 }
 
+.intro-quote {
+    font-style: italic;
+    color: var(--maroon);
+    font-weight: 500;
+    margin-top: var(--space-4);
+    font-size: var(--text-lg);
+    border-top: 1px solid var(--gray-200);
+    padding-top: var(--space-4);
+}
+
+/* Live Summary Card */
+.live-summary-card {
+    background: linear-gradient(135deg, var(--cream) 0%, var(--white) 100%);
+    border-color: var(--saffron-light);
+    text-align: center;
+}
+
+.live-summary-card:hover {
+    transform: none;
+    cursor: default;
+}
+
+.live-summary-card .card-title {
+    color: var(--maroon);
+    font-size: var(--text-lg);
+    letter-spacing: 0.05em;
+}
+
+.summary-header {
+    font-size: var(--text-base);
+    color: var(--gray-700);
+    margin-bottom: var(--space-4);
+    font-weight: 500;
+}
+
+.summary-stats {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+}
+
+.summary-stats li {
+    color: var(--gray-600);
+    font-size: var(--text-base);
+    padding: var(--space-2) 0;
+    border-bottom: 1px dashed var(--gray-200);
+}
+
+.summary-stats li:last-child {
+    border-bottom: none;
+}
+
+/* Admin Disclaimer */
+.admin-disclaimer {
+    width: 100%;
+    text-align: center;
+    font-size: var(--text-sm);
+    color: var(--gray-500);
+    font-style: italic;
+    margin-top: var(--space-4);
+}
+
 /* Cards Grid with staggered animation */
 .landing-cards {
     display: grid;

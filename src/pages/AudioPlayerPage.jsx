@@ -5,18 +5,16 @@ import { useToast } from '../context/ToastContext';
 import { submitNamaEntry } from '../services/namaService';
 import './AudioPlayerPage.css';
 
-// 10 Audio files with titles
+// 8 Audio files from Cloudinary
 const AUDIO_FILES = [
-    { id: 1, title: 'Yogi Ramsuratkumar Nama Japa - 1', src: '/audio/nama_1.mp3' },
-    { id: 2, title: 'Yogi Ramsuratkumar Nama Japa - 2', src: '/audio/nama_2.mp3' },
-    { id: 3, title: 'Yogi Ramsuratkumar Nama Japa - 3', src: '/audio/nama_3.mp3' },
-    { id: 4, title: 'Yogi Ramsuratkumar Nama Japa - 4', src: '/audio/nama_4.mp3' },
-    { id: 5, title: 'Yogi Ramsuratkumar Nama Japa - 5', src: '/audio/nama_5.mp3' },
-    { id: 6, title: 'Yogi Ramsuratkumar Nama Japa - 6', src: '/audio/nama_6.mp3' },
-    { id: 7, title: 'Yogi Ramsuratkumar Nama Japa - 7', src: '/audio/nama_7.mp3' },
-    { id: 8, title: 'Yogi Ramsuratkumar Nama Japa - 8', src: '/audio/nama_8.mp3' },
-    { id: 9, title: 'Yogi Ramsuratkumar Nama Japa - 9', src: '/audio/nama_9.mp3' },
-    { id: 10, title: 'Yogi Ramsuratkumar Nama Japa - 10', src: '/audio/nama_10.mp3' }
+    { id: 1, title: 'Yogi Ramsuratkumar Nama Japa - 1', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666688/01.VoiceofGod_tagpxh.mp3' },
+    { id: 2, title: 'Yogi Ramsuratkumar Nama Japa - 2', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666687/02.VoiceofGod_zdvkzf.mp3' },
+    { id: 3, title: 'Yogi Ramsuratkumar Nama Japa - 3', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666690/03.VoiceofGod_e18rxd.mp3' },
+    { id: 4, title: 'Yogi Ramsuratkumar Nama Japa - 4', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666693/06.SP1_qxu4yy.mp3' },
+    { id: 5, title: 'Yogi Ramsuratkumar Nama Japa - 5', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666692/07.SS1_jr59ev.mp3' },
+    { id: 6, title: 'Yogi Ramsuratkumar Nama Japa - 6', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666693/08.SP3_mv19yp.mp3' },
+    { id: 7, title: 'Yogi Ramsuratkumar Nama Japa - 7', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666694/09.SP4_v4xauk.mp3' },
+    { id: 8, title: 'Yogi Ramsuratkumar Nama Japa - 8', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666691/10.MA1_j2lr9g.mp3' }
 ];
 
 const AudioPlayerPage = () => {
@@ -55,6 +53,28 @@ const AudioPlayerPage = () => {
             }
         };
     }, []);
+
+    // Attach ended event listener to audio element
+    useEffect(() => {
+        const audio = audioRef.current;
+        if (!audio) return;
+
+        const handleEnded = () => {
+            console.log('Audio ended - incrementing count');
+            setLoopCount(prev => prev + 1);
+            setNamaCount(prev => prev + 4);
+            // Restart the audio for continuous loop
+            if (isPlaying) {
+                audio.currentTime = 0;
+                audio.play().catch(err => console.log('Replay failed:', err));
+            }
+        };
+
+        audio.addEventListener('ended', handleEnded);
+        return () => {
+            audio.removeEventListener('ended', handleEnded);
+        };
+    }, [isPlaying]);
 
     // Handle audio loop completion
     const handleAudioEnded = () => {
@@ -339,6 +359,8 @@ const AudioPlayerPage = () => {
                 ref={audioRef}
                 onEnded={handleAudioEnded}
                 loop={false}
+                crossOrigin="anonymous"
+                preload="auto"
             />
         </div>
     );

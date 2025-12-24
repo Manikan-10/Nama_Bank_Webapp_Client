@@ -9,9 +9,13 @@ import {
     getAllUsers,
     updateUser,
     getAllNamaEntries,
-    getAccountStats
+    getAccountStats,
+    getUserAccountLinks,
+    linkUserToAccounts
 } from '../services/namaService';
 import { supabase } from '../supabaseClient';
+import ExcelUpload from '../components/ExcelUpload';
+import '../components/ExcelUpload.css';
 import './AdminDashboardPage.css';
 
 const AdminDashboardPage = () => {
@@ -40,6 +44,15 @@ const AdminDashboardPage = () => {
     const [moderatorUsername, setModeratorUsername] = useState('');
     const [moderatorPassword, setModeratorPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+
+    // Bank allocation modal states
+    const [showBankAllocationModal, setShowBankAllocationModal] = useState(false);
+    const [selectedUserForAllocation, setSelectedUserForAllocation] = useState(null);
+    const [selectedBanksForAllocation, setSelectedBanksForAllocation] = useState([]);
+    const [userCurrentBanks, setUserCurrentBanks] = useState([]);
+
+    // Bulk upload modal state
+    const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
 
     useEffect(() => {
         if (!isAdmin) {
@@ -120,6 +133,71 @@ const AdminDashboardPage = () => {
             loadData();
         } catch (err) {
             error('Failed to update user status');
+        }
+    };
+
+    // Bank allocation handlers
+    const handleOpenBankAllocation = async (user) => {
+        setSelectedUserForAllocation(user);
+        try {
+            const links = await getUserAccountLinks(user.id);
+            const linkedAccountIds = links.map(l => l.account_id);
+            setUserCurrentBanks(linkedAccountIds);
+            setSelectedBanksForAllocation(linkedAccountIds);
+            setShowBankAllocationModal(true);
+        } catch (err) {
+            error('Failed to load user bank links');
+        }
+    };
+
+    const handleSaveBankAllocation = async () => {
+        if (!selectedUserForAllocation) return;
+
+        try {
+            // Get new banks to add (ones selected but not currently linked)
+            const newBanks = selectedBanksForAllocation.filter(
+                id => !userCurrentBanks.includes(id)
+            );
+
+            if (newBanks.length > 0) {
+                await linkUserToAccounts(selectedUserForAllocation.id, newBanks);
+            }
+
+            success('Bank accounts allocated successfully!');
+            setShowBankAllocationModal(false);
+            setSelectedUserForAllocation(null);
+            setSelectedBanksForAllocation([]);
+            setUserCurrentBanks([]);
+        } catch (err) {
+            error('Failed to allocate bank accounts');
+        }
+    };
+
+    const toggleBankSelection = (accountId) => {
+        setSelectedBanksForAllocation(prev =>
+            prev.includes(accountId)
+                ? prev.filter(id => id !== accountId)
+                : [...prev, accountId]
+        );
+    };
+
+    // Bulk upload handler
+    const handleBulkUpload = async (users) => {
+        try {
+            const { results, errors: uploadErrors } = await import('../services/namaService')
+                .then(module => module.bulkCreateUsers(users));
+
+            if (results.length > 0) {
+                success(`Successfully added ${results.length} devotees!`);
+            }
+            if (uploadErrors.length > 0) {
+                error(`${uploadErrors.length} devotees failed to upload`);
+            }
+
+            setShowBulkUploadModal(false);
+            loadData();
+        } catch (err) {
+            error('Bulk upload failed. Please try again.');
         }
     };
 
@@ -364,6 +442,17 @@ const AdminDashboardPage = () => {
                                 <section className="admin-section">
                                     <div className="section-header">
                                         <h2>Registered Users ({users.length})</h2>
+                                        <button
+                                            className="btn btn-primary"
+                                            onClick={() => setShowBulkUploadModal(true)}
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                                <polyline points="17 8 12 3 7 8" />
+                                                <line x1="12" y1="3" x2="12" y2="15" />
+                                            </svg>
+                                            Bulk Upload
+                                        </button>
                                     </div>
 
                                     <div className="table-container">
@@ -395,12 +484,20 @@ const AdminDashboardPage = () => {
                                                         </td>
                                                         <td>{formatDate(user.created_at)}</td>
                                                         <td>
-                                                            <button
-                                                                className={`btn btn-sm ${user.is_active ? 'btn-secondary' : 'btn-primary'}`}
-                                                                onClick={() => handleToggleUserStatus(user)}
-                                                            >
-                                                                {user.is_active ? 'Disable' : 'Enable'}
-                                                            </button>
+                                                            <div className="action-buttons">
+                                                                <button
+                                                                    className="btn btn-sm btn-ghost"
+                                                                    onClick={() => handleOpenBankAllocation(user)}
+                                                                >
+                                                                    Allocate Banks
+                                                                </button>
+                                                                <button
+                                                                    className={`btn btn-sm ${user.is_active ? 'btn-secondary' : 'btn-primary'}`}
+                                                                    onClick={() => handleToggleUserStatus(user)}
+                                                                >
+                                                                    {user.is_active ? 'Disable' : 'Enable'}
+                                                                </button>
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -444,9 +541,6 @@ const AdminDashboardPage = () => {
                                                 ))}
                                             </tbody>
                                         </table>
-                                    </div>
-                                    <div className="admin-note">
-                                        <p><strong>Note:</strong> Entries are view-only. Admin cannot edit Nama counts or alter historical devotion data.</p>
                                     </div>
                                 </section>
                             )}
@@ -677,6 +771,67 @@ const AdminDashboardPage = () => {
                                 Create
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Bank Allocation Modal */}
+            {showBankAllocationModal && selectedUserForAllocation && (
+                <div className="modal-overlay" onClick={() => setShowBankAllocationModal(false)}>
+                    <div className="modal" onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3 className="modal-title">
+                                Allocate Banks to {selectedUserForAllocation.name}
+                            </h3>
+                            <button className="modal-close" onClick={() => setShowBankAllocationModal(false)}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div className="modal-body">
+                            <p className="modal-description">Select Nama Bank accounts to allocate:</p>
+                            <div className="checkbox-group">
+                                {accounts.filter(acc => acc.is_active).map(account => (
+                                    <label key={account.id} className="checkbox-item">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedBanksForAllocation.includes(account.id)}
+                                            onChange={() => toggleBankSelection(account.id)}
+                                            disabled={userCurrentBanks.includes(account.id)}
+                                        />
+                                        <span>
+                                            {account.name}
+                                            {userCurrentBanks.includes(account.id) && (
+                                                <small className="already-linked"> (Already linked)</small>
+                                            )}
+                                        </span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn btn-ghost" onClick={() => setShowBankAllocationModal(false)}>
+                                Cancel
+                            </button>
+                            <button className="btn btn-primary" onClick={handleSaveBankAllocation}>
+                                Allocate Selected
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Bulk Upload Modal */}
+            {showBulkUploadModal && (
+                <div className="modal-overlay" onClick={() => setShowBulkUploadModal(false)}>
+                    <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+                        <ExcelUpload
+                            onUpload={handleBulkUpload}
+                            onClose={() => setShowBulkUploadModal(false)}
+                            accounts={accounts}
+                        />
                     </div>
                 </div>
             )}

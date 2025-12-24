@@ -1,7 +1,55 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { supabase } from '../supabaseClient';
 import './LandingPage.css';
 
 const LandingPage = () => {
+    const [liveStats, setLiveStats] = useState({
+        totalUsers: 0,
+        totalNamaCount: 0,
+        activeAccounts: 0
+    });
+
+    useEffect(() => {
+        const fetchLiveStats = async () => {
+            try {
+                // Get total users
+                const { count: userCount } = await supabase
+                    .from('users')
+                    .select('*', { count: 'exact', head: true });
+
+                // Get total nama count
+                const { data: namaData } = await supabase
+                    .from('nama_entries')
+                    .select('count');
+                const totalNama = namaData?.reduce((sum, entry) => sum + (entry.count || 0), 0) || 0;
+
+                // Get active accounts count
+                const { count: accountCount } = await supabase
+                    .from('nama_accounts')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('is_active', true);
+
+                setLiveStats({
+                    totalUsers: userCount || 0,
+                    totalNamaCount: totalNama,
+                    activeAccounts: accountCount || 0
+                });
+            } catch (err) {
+                console.error('Error fetching live stats:', err);
+            }
+        };
+
+        fetchLiveStats();
+    }, []);
+
+    const formatNumber = (num) => {
+        if (num >= 10000000) return (num / 10000000).toFixed(2) + ' Cr';
+        if (num >= 100000) return (num / 100000).toFixed(2) + ' Lacs';
+        if (num >= 1000) return num.toLocaleString('en-IN');
+        return num.toString();
+    };
+
     return (
         <div className="landing-page">
             <div className="landing-container">
@@ -24,13 +72,19 @@ const LandingPage = () => {
                                 <strong>Nama Bank</strong> is a humble devotional initiative to encourage continuous Nama Japa.
                             </p>
                             <p>
-                                Chanting the Divine Name purifies the mind and aligns life with higher consciousness.
+                                <strong>Why Chant the Divine Name?</strong><br />
+                                Chanting the Divine Name purifies the mind and prepares the soul for the journey beyond this life.
                             </p>
                             <p>
-                                Counting Nama is not for comparison, but for discipline, continuity, and collective offering.
+                                <strong>Why Count Nama?</strong><br />
+                                Counting Nama is not for comparison, but for discipline, continuity, and sincere remembrance.
                             </p>
                             <p>
-                                When Nama is counted towards a common goal, it inspires perseverance and shared spiritual intent.
+                                <strong>Why Offer Nama Collectively?</strong><br />
+                                When Nama is offered towards a shared goal, even a small effort becomes part of a greater spiritual sankalpa.
+                            </p>
+                            <p className="intro-quote">
+                                <em>"All wealth stays behind. Only Nama travels with us."</em>
                             </p>
                         </div>
                     </div>
@@ -49,9 +103,9 @@ const LandingPage = () => {
                                     <line x1="22" y1="11" x2="16" y2="11" />
                                 </svg>
                             </div>
-                            <h2 className="card-title">New Devotee</h2>
+                            <h2 className="card-title">Join the Nama Sankalpa</h2>
                             <p className="card-description">
-                                Create your devotional account and begin your Nama journey with us
+                                Begin your Nama journey and participate in the collective offering
                             </p>
                             <span className="card-action">
                                 Open Account
@@ -71,9 +125,9 @@ const LandingPage = () => {
                                     <line x1="15" y1="12" x2="3" y2="12" />
                                 </svg>
                             </div>
-                            <h2 className="card-title">Existing Devotee</h2>
+                            <h2 className="card-title">Continue Nama Offering</h2>
                             <p className="card-description">
-                                Continue your devotion and submit your daily Nama count
+                                Continue your daily Nama Japa and record your offering
                             </p>
                             <span className="card-action">
                                 Login
@@ -105,6 +159,66 @@ const LandingPage = () => {
                                 </svg>
                             </span>
                         </Link>
+
+                        {/* Book Shelf Card */}
+                        <Link to="/books" className="landing-card hover-lift">
+                            <div className="card-icon-wrapper">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                                </svg>
+                            </div>
+                            <h2 className="card-title">Book Shelf</h2>
+                            <p className="card-description">
+                                Read monthly devotional editions and spiritual texts
+                            </p>
+                            <span className="card-action">
+                                Browse Library
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="5" y1="12" x2="19" y2="12" />
+                                    <polyline points="12 5 19 12 12 19" />
+                                </svg>
+                            </span>
+                        </Link>
+
+                        {/* Prayer Box Card */}
+                        <Link to="/prayers" className="landing-card hover-lift">
+                            <div className="card-icon-wrapper">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                    <circle cx="9" cy="7" r="4" />
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                </svg>
+                            </div>
+                            <h2 className="card-title">Prayer Box</h2>
+                            <p className="card-description">
+                                Submit your prayers and support others in faith
+                            </p>
+                            <span className="card-action">
+                                Submit Your Prayers
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="5" y1="12" x2="19" y2="12" />
+                                    <polyline points="12 5 19 12 12 19" />
+                                </svg>
+                            </span>
+                        </Link>
+
+                        {/* Live Summary Box */}
+                        <div className="landing-card live-summary-card">
+                            <div className="card-icon-wrapper">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                                </svg>
+                            </div>
+                            <h2 className="card-title">LIVE SUMMARY</h2>
+                            <p className="summary-header">🌸 Nama Bank at a Glance</p>
+                            <ul className="summary-stats">
+                                <li>• {formatNumber(liveStats.totalUsers)} devotees already participating</li>
+                                <li>• {formatNumber(liveStats.totalNamaCount)} Nama offered so far</li>
+                                <li>• {liveStats.activeAccounts} active Nama Sankalpas</li>
+                            </ul>
+                        </div>
                     </div>
 
                     {/* Moderator & Admin Links */}
@@ -124,6 +238,7 @@ const LandingPage = () => {
                             </svg>
                             Admin Access
                         </Link>
+                        <p className="admin-disclaimer">Moderator and Admin access are restricted.</p>
                     </div>
                 </main>
 

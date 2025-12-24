@@ -25,6 +25,9 @@ import AdminLoginPage from './pages/AdminLoginPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import ModeratorLoginPage from './pages/ModeratorLoginPage';
 import ModeratorDashboardPage from './pages/ModeratorDashboardPage';
+import PrayerPage from './pages/PrayerPage';
+import BookshelfPage from './pages/BookshelfPage';
+import BookReaderPage from './pages/BookReaderPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -94,6 +97,7 @@ function AppRoutes() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/reports/public" element={<PublicReportsPage />} />
+      <Route path="/prayers" element={<PrayerPage />} />
 
       {/* Protected User Routes */}
       <Route path="/dashboard" element={
@@ -114,6 +118,16 @@ function AppRoutes() {
       <Route path="/reports" element={
         <ProtectedRoute>
           <ReportsPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/books" element={
+        <ProtectedRoute>
+          <BookshelfPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/books/:id" element={
+        <ProtectedRoute>
+          <BookReaderPage />
         </ProtectedRoute>
       } />
 
