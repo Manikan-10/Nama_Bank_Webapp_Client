@@ -21,41 +21,80 @@ const BookUpload = ({ onUploadSuccess }) => {
         }
 
         setFile(selectedFile);
-        parseFilename(selectedFile.name);
+        const parsed = parseFilename(selectedFile.name);
+        setMetadata(parsed);
+        setParseError(parsed.isAutomatic ? '' : 'Filename does not match standard format. Please fill in the details manually.');
     };
 
     const parseFilename = (filename) => {
-        // Remove extension
         const name = filename.replace(/\.pdf$/i, '');
         const parts = name.split('_');
 
-        // Expected format: Title_Year_Month_Country_City_Language_EditionType
-        // Minimum 7 parts
-        if (parts.length < 7) {
-            setParseError('Filename does not match format: Title_Year_Month_Country_City_Language_EditionType.pdf');
-            setMetadata(null);
-            return;
+        // Initial empty/default metadata
+        let result = {
+            title: name.split('_').join(' '),
+            year: new Date().getFullYear().toString(),
+            month: new Date().toLocaleString('default', { month: 'long' }),
+            country: '',
+            city: '',
+            language: 'English',
+            edition_type: 'Monthly',
+            isAutomatic: false
+        };
+
+        // If it matches exactly
+        if (parts.length >= 7) {
+            const [title, year, month, country, city, language, ...editionParts] = parts;
+            result = {
+                title: title.replace(/-/g, ' '),
+                year,
+                month,
+                country,
+                city,
+                language,
+                edition_type: editionParts.join('_'),
+                isAutomatic: true
+            };
+        } else {
+            // Intelligent guessing (Automatic categorization)
+            const lowerName = name.toLowerCase();
+
+            // Guess Year
+            const yearMatch = name.match(/20\d{2}/);
+            if (yearMatch) result.year = yearMatch[0];
+
+            // Guess Month
+            const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+            const foundMonth = months.find(m => lowerName.includes(m));
+            if (foundMonth) result.month = foundMonth.charAt(0).toUpperCase() + foundMonth.slice(1);
+
+            // Guess Country/City
+            if (lowerName.includes('uk') || lowerName.includes('united kingdom')) result.country = 'UK';
+            if (lowerName.includes('london')) { result.city = 'London'; result.country = 'UK'; }
+            if (lowerName.includes('india')) result.country = 'India';
+            if (lowerName.includes('chennai')) { result.city = 'Chennai'; result.country = 'India'; }
+
+            // Guess Edition
+            if (lowerName.includes('monthly')) result.edition_type = 'Monthly';
+            if (lowerName.includes('special')) result.edition_type = 'Special Edition';
+            if (lowerName.includes('magazine')) result.edition_type = 'eMagazine';
         }
 
-        const [title, year, month, country, city, language, ...editionParts] = parts;
-        const editionType = editionParts.join('_'); // Join remaining parts if edition has underscores? Or strict 7? 
-        // User said: Title_Year_Month_Country_City_Language_EditionType.pdf
-        // Let's assume strict structure but be flexible on the last part.
+        return result;
+    };
 
-        setMetadata({
-            title,
-            year,
-            month,
-            country,
-            city,
-            language,
-            edition_type: editionType
-        });
-        setParseError('');
+    const handleMetadataChange = (key, value) => {
+        setMetadata(prev => ({ ...prev, [key]: value }));
     };
 
     const handleUpload = async () => {
         if (!file || !metadata) return;
+
+        // Basic validation before upload
+        if (!metadata.title || !metadata.year || !metadata.month) {
+            error('Title, Year, and Month are required.');
+            return;
+        }
 
         setUploading(true);
         try {
@@ -63,6 +102,7 @@ const BookUpload = ({ onUploadSuccess }) => {
             success('Book uploaded successfully!');
             setFile(null);
             setMetadata(null);
+            setParseError('');
             if (fileInputRef.current) fileInputRef.current.value = '';
             if (onUploadSuccess) onUploadSuccess();
         } catch (err) {
@@ -106,31 +146,52 @@ const BookUpload = ({ onUploadSuccess }) => {
             </div>
 
             {parseError && (
-                <div className="error-message">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                <div className="info-message">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12.01" y2="16" /><line x1="12" y1="8" x2="12" y2="12" /></svg>
                     {parseError}
                 </div>
             )}
 
             {metadata && (
-                <div className="metadata-preview">
-                    <h4>Extracted Details</h4>
-                    <div className="metadata-grid">
-                        <div className="meta-item"><label>Title:</label> <span>{metadata.title}</span></div>
-                        <div className="meta-item"><label>Year:</label> <span>{metadata.year}</span></div>
-                        <div className="meta-item"><label>Month:</label> <span>{metadata.month}</span></div>
-                        <div className="meta-item"><label>Country:</label> <span>{metadata.country}</span></div>
-                        <div className="meta-item"><label>City:</label> <span>{metadata.city}</span></div>
-                        <div className="meta-item"><label>Language:</label> <span>{metadata.language}</span></div>
-                        <div className="meta-item"><label>Type:</label> <span>{metadata.edition_type}</span></div>
+                <div className="metadata-editor">
+                    <h4>Book Details</h4>
+                    <div className="metadata-form-grid">
+                        <div className="form-group">
+                            <label>Title</label>
+                            <input type="text" value={metadata.title} onChange={e => handleMetadataChange('title', e.target.value)} />
+                        </div>
+                        <div className="form-group">
+                            <label>Year</label>
+                            <input type="text" value={metadata.year} onChange={e => handleMetadataChange('year', e.target.value)} />
+                        </div>
+                        <div className="form-group">
+                            <label>Month</label>
+                            <input type="text" value={metadata.month} onChange={e => handleMetadataChange('month', e.target.value)} />
+                        </div>
+                        <div className="form-group">
+                            <label>Country</label>
+                            <input type="text" value={metadata.country} onChange={e => handleMetadataChange('country', e.target.value)} />
+                        </div>
+                        <div className="form-group">
+                            <label>City</label>
+                            <input type="text" value={metadata.city} onChange={e => handleMetadataChange('city', e.target.value)} />
+                        </div>
+                        <div className="form-group">
+                            <label>Language</label>
+                            <input type="text" value={metadata.language} onChange={e => handleMetadataChange('language', e.target.value)} />
+                        </div>
+                        <div className="form-group">
+                            <label>Edition Type</label>
+                            <input type="text" value={metadata.edition_type} onChange={e => handleMetadataChange('edition_type', e.target.value)} />
+                        </div>
                     </div>
 
                     <button
-                        className="btn btn-primary full-width"
+                        className="btn btn-primary full-width mt-4"
                         onClick={handleUpload}
                         disabled={uploading}
                     >
-                        {uploading ? 'Uploading...' : 'Confirm Upload'}
+                        {uploading ? 'Uploading...' : 'Confirm & Upload'}
                     </button>
                 </div>
             )}

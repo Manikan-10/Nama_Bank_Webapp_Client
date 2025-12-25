@@ -98,6 +98,8 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/reports/public" element={<PublicReportsPage />} />
       <Route path="/prayers" element={<PrayerPage />} />
+      <Route path="/books" element={<BookshelfPage />} />
+      <Route path="/books/:id" element={<BookReaderPage />} />
 
       {/* Protected User Routes */}
       <Route path="/dashboard" element={
@@ -118,16 +120,6 @@ function AppRoutes() {
       <Route path="/reports" element={
         <ProtectedRoute>
           <ReportsPage />
-        </ProtectedRoute>
-      } />
-      <Route path="/books" element={
-        <ProtectedRoute>
-          <BookshelfPage />
-        </ProtectedRoute>
-      } />
-      <Route path="/books/:id" element={
-        <ProtectedRoute>
-          <BookReaderPage />
         </ProtectedRoute>
       } />
 

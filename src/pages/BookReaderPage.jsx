@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Document, Page, pdfjs } from 'react-pdf';
+import HTMLFlipBook from 'react-pageflip';
 import { getBooks, incrementBookView } from '../services/namaService';
 import './BookReaderPage.css';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -12,16 +13,66 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
     import.meta.url,
 ).toString();
 
-
 const BookReaderPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const [book, setBook] = useState(null);
-    const [numPages, setNumPages] = useState(null);
-    const [pageNumber, setPageNumber] = useState(1);
+    const [pdfDocument, setPdfDocument] = useState(null);
+    const [numPages, setNumPages] = useState(0);
+    const [currentPage, setCurrentPage] = useState(0);
     const [scale, setScale] = useState(1.0);
     const [loading, setLoading] = useState(true);
+    const [showOutline, setShowOutline] = useState(false);
+    const [outline, setOutline] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [currentSearchIndex, setCurrentSearchIndex] = useState(-1);
+    const [isSearching, setIsSearching] = useState(false);
+    const [pageDimensions, setPageDimensions] = useState({ width: 550, height: 733 });
+
+    const flipBookRef = useRef(null);
     const containerRef = useRef(null);
+
+    // Aggressive scroll lock - completely freeze background page
+    useEffect(() => {
+        // Save current scroll position
+        const scrollY = window.scrollY;
+        const scrollX = window.scrollX;
+
+        // Lock the body in place
+        document.body.style.position = 'fixed';
+        document.body.style.top = `-${scrollY}px`;
+        document.body.style.left = `-${scrollX}px`;
+        document.body.style.width = '100%';
+        document.body.style.overflow = 'hidden';
+
+        // Prevent any scroll events from reaching the body
+        const preventBodyScroll = (e) => {
+            // Only block if not inside our reader
+            if (!e.target.closest('.book-reader-page')) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        };
+
+        document.addEventListener('wheel', preventBodyScroll, { passive: false, capture: true });
+        document.addEventListener('touchmove', preventBodyScroll, { passive: false, capture: true });
+
+        return () => {
+            // Restore body styles
+            document.body.style.position = '';
+            document.body.style.top = '';
+            document.body.style.left = '';
+            document.body.style.width = '';
+            document.body.style.overflow = '';
+
+            // Restore scroll position
+            window.scrollTo(scrollX, scrollY);
+
+            document.removeEventListener('wheel', preventBodyScroll, { capture: true });
+            document.removeEventListener('touchmove', preventBodyScroll, { capture: true });
+        };
+    }, []);
 
     useEffect(() => {
         loadBook();
@@ -29,15 +80,11 @@ const BookReaderPage = () => {
 
     const loadBook = async () => {
         try {
-            // Fetch all books and find the one (optimize later to fetch single)
-            // Ideally we should have getBookById in service. 
-            // Reuse getBooks for now or fetch specific.
             const books = await getBooks();
             const found = books.find(b => b.id === id);
 
             if (found) {
                 setBook(found);
-                // Increment view count
                 incrementBookView(id);
             } else {
                 navigate('/books');
@@ -49,89 +96,228 @@ const BookReaderPage = () => {
         }
     };
 
-    const onDocumentLoadSuccess = ({ numPages }) => {
-        setNumPages(numPages);
-    };
+    const onDocumentLoadSuccess = useCallback(async (pdf) => {
+        setPdfDocument(pdf);
+        setNumPages(pdf.numPages);
+        try {
+            const outlineData = await pdf.getOutline();
+            setOutline(outlineData || []);
 
-    const changePage = (offset) => {
-        setPageNumber(prevPageNumber => prevPageNumber + offset);
-    };
+            const firstPage = await pdf.getPage(1);
+            const viewport = firstPage.getViewport({ scale: 1 });
+            setPageDimensions({ width: viewport.width, height: viewport.height });
+        } catch (e) {
+            console.error('Error getting PDF metadata:', e);
+        }
+    }, []);
 
-    const previousPage = () => changePage(-1);
-    const nextPage = () => changePage(1);
+    const onFlip = useCallback((e) => {
+        setCurrentPage(e.data);
+    }, []);
+
+    const jumpToPage = (pageNum) => {
+        if (flipBookRef.current) {
+            flipBookRef.current.pageFlip().flip(pageNum);
+        }
+        setShowOutline(false);
+    };
 
     const toggleFullscreen = () => {
         if (!document.fullscreenElement) {
-            containerRef.current.requestFullscreen().catch(err => {
-                console.error(`Error attempting to enable fullscreen: ${err.message}`);
-            });
+            containerRef.current.requestFullscreen();
         } else {
             document.exitFullscreen();
         }
     };
 
+    const handleWheel = (e) => {
+        // ALWAYS prevent default to stop any scrolling within the reader
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Only turn pages - no scrolling at all
+        if (!flipBookRef.current) return;
+        if (e.deltaY > 0) {
+            flipBookRef.current.pageFlip().flipNext();
+        } else if (e.deltaY < 0) {
+            flipBookRef.current.pageFlip().flipPrev();
+        }
+    };
+
+    const handleSearch = async (e) => {
+        e.preventDefault();
+        if (!searchQuery.trim() || !pdfDocument) return;
+
+        setIsSearching(true);
+        setSearchResults([]);
+        setCurrentSearchIndex(-1);
+
+        try {
+            const results = [];
+            for (let i = 1; i <= numPages; i++) {
+                const page = await pdfDocument.getPage(i);
+                const textContent = await page.getTextContent();
+                const text = textContent.items.map(item => item.str).join(' ');
+
+                if (text.toLowerCase().includes(searchQuery.toLowerCase())) {
+                    results.push(i - 1); // 0-indexed for flipbook
+                }
+            }
+            setSearchResults(results);
+            if (results.length > 0) {
+                setCurrentSearchIndex(0);
+                jumpToPage(results[0]);
+            }
+        } catch (err) {
+            console.error('Search error:', err);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const nextSearchMatch = () => {
+        if (searchResults.length === 0) return;
+        const nextIndex = (currentSearchIndex + 1) % searchResults.length;
+        setCurrentSearchIndex(nextIndex);
+        jumpToPage(searchResults[nextIndex]);
+    };
+
+    const textRenderer = useCallback((textItem) => {
+        if (!searchQuery) return textItem.str;
+
+        const parts = textItem.str.split(new RegExp(`(${searchQuery})`, 'gi'));
+        return parts.map((part, i) =>
+            part.toLowerCase() === searchQuery.toLowerCase()
+                ? <mark key={i} className="search-highlight">{part}</mark>
+                : part
+        );
+    }, [searchQuery]);
+
     if (loading) return <div className="reader-loading"><span className="loader"></span></div>;
     if (!book) return null;
 
+    const currentWidth = Math.round(pageDimensions.width * scale);
+    const currentHeight = Math.round(pageDimensions.height * scale);
+
     return (
-        <div className="book-reader-page" ref={containerRef}>
-            {/* Header / Toolbar */}
+        <div className="book-reader-page" ref={containerRef} onWheel={handleWheel}>
+            {/* Toolbar */}
             <header className="reader-toolbar">
-                <button className="btn-icon" onClick={() => navigate('/books')} title="Back to Library">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
-                </button>
+                <div className="toolbar-left">
+                    <button className="btn-icon" onClick={() => navigate('/books')} title="Back to Library">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+                    </button>
+                    <button className="btn-icon" onClick={() => setShowOutline(!showOutline)} title="Table of Contents">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
+                    </button>
+                </div>
 
                 <div className="book-title-mini">
                     <strong>{book.title}</strong>
-                    <span>Page {pageNumber} of {numPages}</span>
+                    <span>Page {currentPage + 1} of {numPages}</span>
                 </div>
 
-                <div className="reader-controls">
-                    <button className="btn-icon" onClick={() => setScale(s => Math.max(0.5, s - 0.2))} title="Zoom Out">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="8" y1="11" x2="14" y2="11" /></svg>
-                    </button>
-                    <button className="btn-icon" onClick={() => setScale(s => Math.min(2.5, s + 0.2))} title="Zoom In">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="11" y1="8" x2="11" y2="14" /><line x1="8" y1="11" x2="14" y2="11" /></svg>
-                    </button>
-                    <button className="btn-icon" onClick={toggleFullscreen} title="Fullscreen">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" /></svg>
+                <div className="toolbar-right">
+                    <div className="search-container">
+                        <form className="search-box" onSubmit={handleSearch}>
+                            <input
+                                type="text"
+                                placeholder="Search..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                            <button type="submit" disabled={isSearching}>
+                                {isSearching ? <span className="mini-loader"></span> : <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>}
+                            </button>
+                        </form>
+                        {searchResults.length > 0 && (
+                            <div className="search-results-nav">
+                                <span>{currentSearchIndex + 1}/{searchResults.length}</span>
+                                <button onClick={nextSearchMatch} title="Next Match">›</button>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="zoom-controls">
+                        <button className="btn-icon" onClick={() => setScale(s => Math.max(0.5, s - 0.1))}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                        </button>
+                        <span className="zoom-level">{Math.round(scale * 100)}%</span>
+                        <button className="btn-icon" onClick={() => setScale(s => Math.min(2.0, s + 0.1))}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                        </button>
+                    </div>
+
+                    <button className="btn-icon" onClick={toggleFullscreen}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" /></svg>
                     </button>
                 </div>
             </header>
 
-            {/* Main Content */}
-            <main className="reader-content">
-                <div className="pdf-container">
+            <main className="reader-main">
+                {/* TOC Sidebar */}
+                {showOutline && (
+                    <aside className="outline-sidebar shadow-lg">
+                        <div className="sidebar-header">
+                            <h3>Contents</h3>
+                            <button onClick={() => setShowOutline(false)}>×</button>
+                        </div>
+                        <div className="outline-list">
+                            {outline.length > 0 ? outline.map((item, idx) => (
+                                <button key={idx} onClick={() => jumpToPage(item.dest)}>
+                                    {item.title}
+                                </button>
+                            )) : (
+                                <p className="no-outline">No table of contents found</p>
+                            )}
+                        </div>
+                    </aside>
+                )}
+
+                <div className="flipbook-wrapper">
                     <Document
                         file={book.file_url}
                         onLoadSuccess={onDocumentLoadSuccess}
                         loading={<div className="loader"></div>}
-                        error={<div className="error">Failed to load PDF. Check internet or file permission.</div>}
                     >
-                        <Page
-                            pageNumber={pageNumber}
-                            scale={scale}
-                            renderTextLayer={true}
-                            renderAnnotationLayer={true}
-                        />
+                        <HTMLFlipBook
+                            width={currentWidth}
+                            height={currentHeight}
+                            size="fixed"
+                            startPage={currentPage}
+                            minWidth={315}
+                            maxWidth={1000}
+                            minHeight={400}
+                            maxHeight={1533}
+                            maxShadowOpacity={0.5}
+                            showCover={true}
+                            mobileScrollSupport={true}
+                            onFlip={onFlip}
+                            className="nama-flipbook"
+                            ref={flipBookRef}
+                        >
+                            {Array.from(new Array(numPages), (el, index) => (
+                                <div key={`page_${index + 1}`} className="page-content">
+                                    <Page
+                                        pageNumber={index + 1}
+                                        width={currentWidth}
+                                        renderTextLayer={true}
+                                        renderAnnotationLayer={true}
+                                        customTextRenderer={textRenderer}
+                                    />
+                                    <div className="page-footer">{index + 1}</div>
+                                </div>
+                            ))}
+                        </HTMLFlipBook>
                     </Document>
                 </div>
 
-                {/* Navigation Overlay Arrows */}
-                <button
-                    className="nav-arrow prev"
-                    disabled={pageNumber <= 1}
-                    onClick={previousPage}
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+                {/* Navigation Arrows */}
+                <button className="nav-btn prev" onClick={() => flipBookRef.current.pageFlip().flipPrev()}>
+                    ‹
                 </button>
-
-                <button
-                    className="nav-arrow next"
-                    disabled={pageNumber >= numPages}
-                    onClick={nextPage}
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+                <button className="nav-btn next" onClick={() => flipBookRef.current.pageFlip().flipNext()}>
+                    ›
                 </button>
             </main>
         </div>

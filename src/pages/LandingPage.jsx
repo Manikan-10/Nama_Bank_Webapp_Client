@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
+import { getBooks, getApprovedPrayers } from '../services/namaService';
 import './LandingPage.css';
 
 const LandingPage = () => {
@@ -9,9 +10,12 @@ const LandingPage = () => {
         totalNamaCount: 0,
         activeAccounts: 0
     });
+    const [recentBooks, setRecentBooks] = useState([]);
+    const [recentPrayers, setRecentPrayers] = useState([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const fetchLiveStats = async () => {
+        const fetchData = async () => {
             try {
                 // Get total users
                 const { count: userCount } = await supabase
@@ -35,12 +39,23 @@ const LandingPage = () => {
                     totalNamaCount: totalNama,
                     activeAccounts: accountCount || 0
                 });
+
+                // Fetch recent books and prayers
+                const [books, prayers] = await Promise.all([
+                    getBooks(),
+                    getApprovedPrayers()
+                ]);
+                setRecentBooks(books.slice(0, 3));
+                setRecentPrayers(prayers.slice(0, 5));
+
             } catch (err) {
-                console.error('Error fetching live stats:', err);
+                console.error('Error fetching landing data:', err);
+            } finally {
+                setLoading(false);
             }
         };
 
-        fetchLiveStats();
+        fetchData();
     }, []);
 
     const formatNumber = (num) => {
@@ -220,6 +235,54 @@ const LandingPage = () => {
                             </ul>
                         </div>
                     </div>
+
+                    {/* New on Book Shelf Section */}
+                    <section className="landing-content-section section-books">
+                        <div className="section-header">
+                            <h2>New on Book Shelf</h2>
+                            <Link to="/books" className="view-all">View All Books →</Link>
+                        </div>
+                        <div className="landing-books-grid">
+                            {recentBooks.map(book => (
+                                <Link to={`/books/${book.id}`} key={book.id} className="landing-book-item">
+                                    <div className="landing-book-cover">
+                                        <div className="book-spine"></div>
+                                        <div className="book-info">
+                                            <h3>{book.title}</h3>
+                                            <p>{book.month} {book.year}</p>
+                                        </div>
+                                    </div>
+                                    <div className="landing-book-details">
+                                        <h4>{book.title}</h4>
+                                        <span>{book.language} • {book.edition_type}</span>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    </section>
+
+                    {/* Recent Prayers Section */}
+                    <section className="landing-content-section section-prayers">
+                        <div className="section-header">
+                            <h2>Prayer Box</h2>
+                            <Link to="/prayers" className="view-all">Visit Prayer Wall →</Link>
+                        </div>
+                        <div className="landing-prayers-list">
+                            {recentPrayers.map(prayer => (
+                                <div key={prayer.id} className="landing-prayer-item">
+                                    <p className="prayer-text">{prayer.prayer_text}</p>
+                                    <div className="prayer-meta">
+                                        <span className="prayer-author">- {prayer.privacy === 'anonymous' ? 'Anonymous' : prayer.name}</span>
+                                        <span className="prayer-count">🌸 {prayer.prayer_count || 0} prayers offered</span>
+                                    </div>
+                                </div>
+                            ))}
+                            <div className="submit-prompt">
+                                <p>Do you have a prayer request?</p>
+                                <Link to="/prayers" className="btn btn-sm btn-outline">Submit Prayer</Link>
+                            </div>
+                        </div>
+                    </section>
 
                     {/* Moderator & Admin Links */}
                     <div className="admin-section">

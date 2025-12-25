@@ -522,11 +522,13 @@ export const uploadBook = async (file, metadata) => {
         .from('library')
         .getPublicUrl(filePath);
 
-    // 3. Insert into books table
+    // 3. Insert into books table - exclude isAutomatic as it's not a database column
+    const { isAutomatic, ...bookData } = metadata;
+
     const { data, error } = await supabase
         .from('books')
         .insert({
-            ...metadata,
+            ...bookData,
             file_url: publicUrl
         })
         .select()
