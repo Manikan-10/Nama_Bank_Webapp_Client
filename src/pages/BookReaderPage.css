@@ -269,6 +269,16 @@
     /* Center within the scrollable area */
 }
 
+.pdf-error {
+    color: #f87171;
+    text-align: center;
+    padding: 40px;
+    font-size: 1.1rem;
+    background: rgba(248, 113, 113, 0.1);
+    border-radius: 12px;
+    margin: auto;
+}
+
 .page-content {
     background: white;
     height: 100%;
@@ -341,16 +351,133 @@ canvas {
     outline: none;
 }
 
-@media (max-width: 600px) {
-    .reader-toolbar {
-        padding: 0 0.5rem;
+@media (max-width: 768px) {
+    .book-reader-page {
+        /* Handle notches and safe areas */
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
     }
 
-    .search-box {
+    .reader-toolbar {
+        height: auto;
+        min-height: 50px;
+        padding: 8px;
+        padding-top: calc(8px + env(safe-area-inset-top));
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .toolbar-left,
+    .toolbar-right {
+        gap: 0.5rem;
+    }
+
+    .btn-icon {
+        width: 36px;
+        height: 36px;
+    }
+
+    .book-title-mini {
+        order: -1;
+        width: 100%;
+        margin-bottom: 4px;
+    }
+
+    .book-title-mini strong {
+        font-size: 0.85rem;
+        max-width: 90vw;
+    }
+
+    .book-title-mini span {
+        font-size: 0.7rem;
+    }
+
+    .search-container {
         display: none;
     }
 
+    .zoom-controls {
+        padding: 0;
+    }
+
+    .zoom-level {
+        min-width: 40px;
+        font-size: 0.7rem;
+    }
+
+    .reader-main {
+        flex: 1;
+        min-height: 0;
+    }
+
     .flipbook-wrapper {
-        padding: 10px;
+        padding: 5px;
+        padding-bottom: calc(5px + env(safe-area-inset-bottom));
+    }
+
+    .nama-flipbook {
+        max-width: 100vw !important;
+        max-height: calc(100vh - 120px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+    }
+
+    .page-content {
+        max-width: 100%;
+    }
+
+    .nav-btn {
+        width: 40px;
+        height: 60px;
+        font-size: 1.8rem;
+    }
+
+    .nav-btn.prev {
+        left: 5px;
+    }
+
+    .nav-btn.next {
+        right: 5px;
+    }
+
+    .outline-sidebar {
+        width: 100%;
+        max-width: 280px;
+    }
+
+    .page-footer {
+        font-size: 10px;
+    }
+
+    .pdf-error {
+        padding: 20px;
+        font-size: 0.9rem;
+    }
+}
+
+/* Extra small devices */
+@media (max-width: 400px) {
+    .reader-toolbar {
+        padding: 6px;
+    }
+
+    .btn-icon {
+        width: 32px;
+        height: 32px;
+    }
+
+    .zoom-controls .btn-icon svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    .book-title-mini strong {
+        font-size: 0.75rem;
+    }
+
+    .nav-btn {
+        width: 35px;
+        height: 50px;
+        font-size: 1.5rem;
     }
 }

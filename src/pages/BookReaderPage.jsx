@@ -221,8 +221,29 @@ const BookReaderPage = () => {
     if (loading) return <div className="reader-loading"><span className="loader"></span></div>;
     if (!book) return null;
 
-    const currentWidth = Math.round(pageDimensions.width * scale);
-    const currentHeight = Math.round(pageDimensions.height * scale);
+    // Calculate dimensions that fit within the viewport
+    const isMobile = window.innerWidth <= 768;
+    const toolbarHeight = isMobile ? 100 : 64;
+    const padding = isMobile ? 10 : 80;
+
+    const maxWidth = window.innerWidth - padding;
+    const maxHeight = window.innerHeight - toolbarHeight - padding;
+
+    // Calculate scaled dimensions while maintaining aspect ratio
+    let displayWidth = pageDimensions.width * scale;
+    let displayHeight = pageDimensions.height * scale;
+
+    // Fit to viewport if too large
+    if (displayWidth > maxWidth || displayHeight > maxHeight) {
+        const widthRatio = maxWidth / displayWidth;
+        const heightRatio = maxHeight / displayHeight;
+        const fitRatio = Math.min(widthRatio, heightRatio);
+        displayWidth = displayWidth * fitRatio;
+        displayHeight = displayHeight * fitRatio;
+    }
+
+    const currentWidth = Math.round(displayWidth);
+    const currentHeight = Math.round(displayHeight);
 
     return (
         <div className="book-reader-page" ref={containerRef} onWheel={handleWheel}>
