@@ -17,11 +17,13 @@ const BookReaderPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const [book, setBook] = useState(null);
+    const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
     const [pdfDocument, setPdfDocument] = useState(null);
     const [numPages, setNumPages] = useState(0);
     const [currentPage, setCurrentPage] = useState(0);
     const [scale, setScale] = useState(1.0);
     const [loading, setLoading] = useState(true);
+    const [pdfError, setPdfError] = useState(null);
     const [showOutline, setShowOutline] = useState(false);
     const [outline, setOutline] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -86,6 +88,20 @@ const BookReaderPage = () => {
             if (found) {
                 setBook(found);
                 incrementBookView(id);
+
+                // Fetch PDF as blob to bypass CORS
+                try {
+                    const response = await fetch(found.file_url);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const blob = await response.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    setPdfBlobUrl(blobUrl);
+                } catch (pdfErr) {
+                    console.error('Error fetching PDF:', pdfErr);
+                    setPdfError('Failed to load PDF. Please try again later.');
+                }
             } else {
                 navigate('/books');
             }
@@ -95,6 +111,15 @@ const BookReaderPage = () => {
             setLoading(false);
         }
     };
+
+    // Cleanup blob URL on unmount
+    useEffect(() => {
+        return () => {
+            if (pdfBlobUrl) {
+                URL.revokeObjectURL(pdfBlobUrl);
+            }
+        };
+    }, [pdfBlobUrl]);
 
     const onDocumentLoadSuccess = useCallback(async (pdf) => {
         setPdfDocument(pdf);
@@ -275,41 +300,47 @@ const BookReaderPage = () => {
                 )}
 
                 <div className="flipbook-wrapper">
-                    <Document
-                        file={book.file_url}
-                        onLoadSuccess={onDocumentLoadSuccess}
-                        loading={<div className="loader"></div>}
-                    >
-                        <HTMLFlipBook
-                            width={currentWidth}
-                            height={currentHeight}
-                            size="fixed"
-                            startPage={currentPage}
-                            minWidth={315}
-                            maxWidth={1000}
-                            minHeight={400}
-                            maxHeight={1533}
-                            maxShadowOpacity={0.5}
-                            showCover={true}
-                            mobileScrollSupport={true}
-                            onFlip={onFlip}
-                            className="nama-flipbook"
-                            ref={flipBookRef}
+                    {pdfError ? (
+                        <div className="pdf-error">{pdfError}</div>
+                    ) : pdfBlobUrl ? (
+                        <Document
+                            file={pdfBlobUrl}
+                            onLoadSuccess={onDocumentLoadSuccess}
+                            loading={<div className="loader"></div>}
                         >
-                            {Array.from(new Array(numPages), (el, index) => (
-                                <div key={`page_${index + 1}`} className="page-content">
-                                    <Page
-                                        pageNumber={index + 1}
-                                        width={currentWidth}
-                                        renderTextLayer={true}
-                                        renderAnnotationLayer={true}
-                                        customTextRenderer={textRenderer}
-                                    />
-                                    <div className="page-footer">{index + 1}</div>
-                                </div>
-                            ))}
-                        </HTMLFlipBook>
-                    </Document>
+                            <HTMLFlipBook
+                                width={currentWidth}
+                                height={currentHeight}
+                                size="fixed"
+                                startPage={currentPage}
+                                minWidth={315}
+                                maxWidth={1000}
+                                minHeight={400}
+                                maxHeight={1533}
+                                maxShadowOpacity={0.5}
+                                showCover={true}
+                                mobileScrollSupport={true}
+                                onFlip={onFlip}
+                                className="nama-flipbook"
+                                ref={flipBookRef}
+                            >
+                                {Array.from(new Array(numPages), (el, index) => (
+                                    <div key={`page_${index + 1}`} className="page-content">
+                                        <Page
+                                            pageNumber={index + 1}
+                                            width={currentWidth}
+                                            renderTextLayer={true}
+                                            renderAnnotationLayer={true}
+                                            customTextRenderer={textRenderer}
+                                        />
+                                        <div className="page-footer">{index + 1}</div>
+                                    </div>
+                                ))}
+                            </HTMLFlipBook>
+                        </Document>
+                    ) : (
+                        <div className="loader"></div>
+                    )}
                 </div>
 
                 {/* Navigation Arrows */}
