@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { supabase } from '../supabaseClient';
 import PasswordInput from '../components/PasswordInput';
-import { validatePhone, validatePassword } from '../utils/validation';
+import { validateWhatsApp } from '../utils/validation';
 import './LoginPage.css';
 
 const LoginPage = () => {
@@ -29,11 +30,11 @@ const LoginPage = () => {
     const validate = () => {
         const newErrors = {};
 
-        const phoneValidation = validatePhone(formData.whatsapp);
-        if (!phoneValidation.valid) newErrors.whatsapp = phoneValidation.error;
+        const whatsappValidation = validateWhatsApp(formData.whatsapp);
+        if (!whatsappValidation.valid) newErrors.whatsapp = whatsappValidation.error;
 
-        const passwordValidation = validatePassword(formData.password);
-        if (!passwordValidation.valid) newErrors.password = passwordValidation.error;
+        // Password validation can be less strict for login, just check if present
+        if (!formData.password) newErrors.password = 'Password is required';
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -46,15 +47,35 @@ const LoginPage = () => {
 
         setLoading(true);
 
-        const result = await login(formData.whatsapp.trim(), formData.password);
+        try {
+            // Look up email from WhatsApp number
+            const { data: userData, error: lookupError } = await supabase
+                .from('users')
+                .select('email')
+                .eq('whatsapp', formData.whatsapp.trim())
+                .eq('is_active', true)
+                .single();
 
-        setLoading(false);
+            if (lookupError || !userData) {
+                setLoading(false);
+                error('No account found with this WhatsApp number.');
+                return;
+            }
 
-        if (result.success) {
-            success('Welcome back! Hari Om');
-            navigate('/dashboard');
-        } else {
-            error(result.error || 'Login failed. Please try again.');
+            // Use found email for Supabase Auth login
+            const result = await login(userData.email, formData.password);
+
+            setLoading(false);
+
+            if (result.success) {
+                success('Welcome back! Hari Om');
+                navigate('/dashboard');
+            } else {
+                error(result.error || 'Invalid password. Please try again.');
+            }
+        } catch (err) {
+            setLoading(false);
+            error('Login failed. Please try again.');
         }
     };
 
@@ -77,7 +98,7 @@ const LoginPage = () => {
                     </div>
 
                     <form onSubmit={handleSubmit} className="login-form" autoComplete="off">
-                        {/* WhatsApp */}
+                        {/* WhatsApp Number */}
                         <div className="form-group">
                             <label className="form-label">WhatsApp Number</label>
                             <input
@@ -86,8 +107,8 @@ const LoginPage = () => {
                                 value={formData.whatsapp}
                                 onChange={handleChange}
                                 className={`form-input ${errors.whatsapp ? 'error' : ''}`}
-                                placeholder="+91 9876543210"
-                                autoComplete="off"
+                                placeholder="9876543210"
+                                autoComplete="tel"
                             />
                             {errors.whatsapp && <span className="form-error">{errors.whatsapp}</span>}
                         </div>
@@ -103,6 +124,11 @@ const LoginPage = () => {
                                 error={errors.password}
                             />
                             {errors.password && <span className="form-error">{errors.password}</span>}
+                            <div className="text-right mt-1">
+                                <Link to="/forgot-password" style={{ fontSize: '0.9rem', color: 'var(--primary-color)', textDecoration: 'none' }}>
+                                    Forgot Password?
+                                </Link>
+                            </div>
                         </div>
 
                         {/* Submit Button */}

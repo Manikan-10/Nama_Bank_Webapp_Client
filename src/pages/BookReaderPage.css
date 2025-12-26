@@ -247,6 +247,13 @@
     color: white;
 }
 
+.outline-list button.active {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    border-left: 3px solid #60a5fa;
+    padding-left: calc(1rem - 3px);
+}
+
 /* Flipbook */
 .flipbook-wrapper {
     flex: 1;
@@ -287,11 +294,14 @@
 }
 
 .search-highlight {
-    background-color: rgba(255, 230, 0, 0.4);
+    background-color: rgba(255, 215, 0, 0.35) !important;
+    /* Transparent Yellow */
+    border-bottom: 2px solid rgba(234, 179, 8, 0.5);
+    /* Semi-transparent border */
+    color: transparent;
+    cursor: text;
     border-radius: 2px;
-    padding: 0 1px;
-    color: inherit;
-    box-shadow: 0 0 5px rgba(255, 230, 0, 0.2);
+    mix-blend-mode: multiply;
 }
 
 .page-footer {

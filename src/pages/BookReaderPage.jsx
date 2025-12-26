@@ -126,7 +126,64 @@ const BookReaderPage = () => {
         setNumPages(pdf.numPages);
         try {
             const outlineData = await pdf.getOutline();
-            setOutline(outlineData || []);
+
+            // Recursive helper to flatten nested outline
+            const flattenOutline = (items) => {
+                let result = [];
+                if (!items) return result;
+                for (const item of items) {
+                    result.push(item);
+                    if (item.items && item.items.length > 0) {
+                        // Recursively get children
+                        result = result.concat(flattenOutline(item.items));
+                    }
+                }
+                return result;
+            };
+
+            // Flatten the outline structure first
+            const flatRawOutline = flattenOutline(outlineData || []);
+
+            // Process outline to extract page numbers
+            const processedOutline = [];
+            if (flatRawOutline.length > 0) {
+                for (const item of flatRawOutline) {
+                    try {
+                        let pageNum = 0;
+                        if (item.dest) {
+                            // Resolve destination to page number
+                            const dest = typeof item.dest === 'string'
+                                ? await pdf.getDestination(item.dest)
+                                : item.dest;
+
+                            if (dest) {
+                                const pageRef = dest[0];
+                                const pageIndex = await pdf.getPageIndex(pageRef);
+                                pageNum = pageIndex; // 0-indexed for flipbook
+                            }
+                        }
+                        processedOutline.push({
+                            title: item.title,
+                            page: pageNum,
+                            // Optional: could keep depth info for indentation later
+                        });
+                    } catch (err) {
+                        console.warn('Could not resolve TOC item:', item.title, err);
+                    }
+                }
+            }
+
+            // Fallback: If no outline found, generate a page list
+            if (processedOutline.length === 0) {
+                for (let i = 0; i < pdf.numPages; i++) {
+                    processedOutline.push({
+                        title: `Page ${i + 1}`,
+                        page: i
+                    });
+                }
+            }
+
+            setOutline(processedOutline);
 
             const firstPage = await pdf.getPage(1);
             const viewport = firstPage.getViewport({ scale: 1 });
@@ -207,16 +264,42 @@ const BookReaderPage = () => {
         jumpToPage(searchResults[nextIndex]);
     };
 
-    const textRenderer = useCallback((textItem) => {
-        if (!searchQuery) return textItem.str;
+    // Search Highlighting Effect
+    useEffect(() => {
+        if (!searchQuery) {
+            // Clear highlights if search is empty
+            const marks = document.querySelectorAll('mark.search-highlight');
+            marks.forEach(mark => {
+                const parent = mark.parentNode;
+                if (parent) {
+                    parent.textContent = parent.textContent; // Unwrap
+                }
+            });
+            return;
+        }
 
-        const parts = textItem.str.split(new RegExp(`(${searchQuery})`, 'gi'));
-        return parts.map((part, i) =>
-            part.toLowerCase() === searchQuery.toLowerCase()
-                ? <mark key={i} className="search-highlight">{part}</mark>
-                : part
-        );
-    }, [searchQuery]);
+        const highlightText = () => {
+            const textLayers = document.querySelectorAll('.react-pdf__Page__textContent');
+            textLayers.forEach(layer => {
+                const spans = layer.querySelectorAll('span');
+                spans.forEach(span => {
+                    // Only process if not already highlighted to prevent potential loops usually
+                    // But here we might be re-running on fresh render
+                    const text = span.textContent;
+                    if (text.toLowerCase().includes(searchQuery.toLowerCase())) {
+                        const regex = new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                        if (regex.test(text)) {
+                            span.innerHTML = text.replace(regex, '<mark class="search-highlight">$1</mark>');
+                        }
+                    }
+                });
+            });
+        };
+
+        // Run after a slight delay to allow React PDF to render text layer
+        const timeoutId = setTimeout(highlightText, 100);
+        return () => clearTimeout(timeoutId);
+    }, [searchQuery, currentPage, scale, pdfDocument]);
 
     if (loading) return <div className="reader-loading"><span className="loader"></span></div>;
     if (!book) return null;
@@ -310,7 +393,11 @@ const BookReaderPage = () => {
                         </div>
                         <div className="outline-list">
                             {outline.length > 0 ? outline.map((item, idx) => (
-                                <button key={idx} onClick={() => jumpToPage(item.dest)}>
+                                <button
+                                    key={idx}
+                                    onClick={() => jumpToPage(item.page)}
+                                    className={currentPage === item.page ? 'active' : ''}
+                                >
                                     {item.title}
                                 </button>
                             )) : (
@@ -340,6 +427,16 @@ const BookReaderPage = () => {
                                 maxHeight={1533}
                                 maxShadowOpacity={0.5}
                                 showCover={true}
+                                drawShadow={true}
+                                flippingTime={600}
+                                usePortrait={false}
+                                startZIndex={0}
+                                autoSize={false}
+                                clickEventForward={false}
+                                useMouseEvents={true}
+                                swipeDistance={50}
+                                showPageCorners={true}
+                                disableFlipByClick={false}
                                 mobileScrollSupport={true}
                                 onFlip={onFlip}
                                 className="nama-flipbook"
@@ -352,7 +449,6 @@ const BookReaderPage = () => {
                                             width={currentWidth}
                                             renderTextLayer={true}
                                             renderAnnotationLayer={true}
-                                            customTextRenderer={textRenderer}
                                         />
                                         <div className="page-footer">{index + 1}</div>
                                     </div>

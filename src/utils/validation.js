@@ -20,6 +20,12 @@ export const validatePhone = (phone) => {
 };
 
 /**
+ * Alias for WhatsApp validation (same as phone validation)
+ */
+export const validateWhatsApp = validatePhone;
+
+
+/**
  * Validates name - allows letters, numbers, spaces, and common name characters
  * Numbers allowed for elderly users who may prefer using numbers
  */
@@ -103,4 +109,21 @@ export const validateLocation = (city, state, country) => {
         valid: Object.keys(errors).length === 0,
         errors
     };
+};
+
+/**
+ * Validates email address
+ */
+export const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!email) {
+        return { valid: false, error: 'Email is required' };
+    }
+
+    if (!emailRegex.test(email)) {
+        return { valid: false, error: 'Please enter a valid email address' };
+    }
+
+    return { valid: true, error: null };
 };

@@ -20,48 +20,70 @@ export const AuthProvider = ({ children }) => {
     const [linkedAccounts, setLinkedAccounts] = useState([]);
 
     useEffect(() => {
-        // Check for stored session on mount
-        const storedUser = localStorage.getItem('namabank_user');
+        // Initialize Supabase Auth listener
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (session?.user) {
+                // Fetch profile data without blocking the auth flow
+                loadUserProfile(session.user.email);
+            } else {
+                setUser(null);
+                setLinkedAccounts([]);
+            }
+
+            // Check for other roles
+            checkOtherRoles();
+            setLoading(false);
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
+
+    const checkOtherRoles = () => {
         const storedAdmin = localStorage.getItem('namabank_admin');
         const storedModerator = localStorage.getItem('namabank_moderator');
 
         if (storedAdmin === 'true') {
             setIsAdmin(true);
-            setLoading(false);
-        } else if (storedModerator) {
+        }
+
+        if (storedModerator) {
             try {
-                const modData = JSON.parse(storedModerator);
-                setModerator(modData);
-            } catch (error) {
-                console.error('Error parsing stored moderator:', error);
+                setModerator(JSON.parse(storedModerator));
+            } catch (e) {
                 localStorage.removeItem('namabank_moderator');
             }
-            setLoading(false);
-        } else if (storedUser) {
-            try {
-                const userData = JSON.parse(storedUser);
-                setUser(userData);
-                fetchLinkedAccounts(userData.id);
-            } catch (error) {
-                console.error('Error parsing stored user:', error);
-                localStorage.removeItem('namabank_user');
-            }
         }
-        setLoading(false);
-    }, []);
+    };
+
+    const loadUserProfile = async (email) => {
+        try {
+            const { data, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('email', email)
+                .single();
+
+            if (data) {
+                setUser(data);
+                fetchLinkedAccounts(data.id);
+            }
+        } catch (error) {
+            console.error('Error loading user profile:', error);
+        }
+    };
 
     const fetchLinkedAccounts = async (userId) => {
         try {
             const { data, error } = await supabase
                 .from('user_account_links')
                 .select(`
-          account_id,
-          nama_accounts (
-            id,
-            name,
-            is_active
-          )
-        `)
+                    account_id,
+                    nama_accounts (
+                        id,
+                        name,
+                        is_active
+                    )
+                `)
                 .eq('user_id', userId);
 
             if (error) throw error;
@@ -76,43 +98,16 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const login = async (whatsapp, password) => {
+    const login = async (email, password) => {
         try {
-            // Fetch user by WhatsApp number
-            const { data: userData, error: userError } = await supabase
-                .from('users')
-                .select('*')
-                .eq('whatsapp', whatsapp)
-                .single();
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
 
-            if (userError || !userData) {
-                return { success: false, error: 'User not found. Please register first.' };
-            }
+            if (error) return { success: false, error: error.message };
 
-            // Verify password (simple comparison for now)
-            if (userData.password_hash !== password) {
-                return { success: false, error: 'Invalid password.' };
-            }
-
-            if (!userData.is_active) {
-                return { success: false, error: 'Your account has been disabled. Please contact admin.' };
-            }
-
-            // Store user session
-            const userSession = {
-                id: userData.id,
-                name: userData.name,
-                whatsapp: userData.whatsapp,
-                city: userData.city,
-                state: userData.state,
-                country: userData.country,
-                profile_photo: userData.profile_photo
-            };
-
-            localStorage.setItem('namabank_user', JSON.stringify(userSession));
-            setUser(userSession);
-            await fetchLinkedAccounts(userData.id);
-
+            // Profile loading happens in onAuthStateChange
             return { success: true };
         } catch (error) {
             console.error('Login error:', error);
@@ -135,7 +130,6 @@ export const AuthProvider = ({ children }) => {
 
     const loginModerator = async (username, password) => {
         try {
-            // Fetch moderator by username
             const { data: modData, error: modError } = await supabase
                 .from('moderators')
                 .select('*')
@@ -146,7 +140,6 @@ export const AuthProvider = ({ children }) => {
                 return { success: false, error: 'Invalid moderator credentials.' };
             }
 
-            // Verify password
             if (modData.password_hash !== password) {
                 return { success: false, error: 'Invalid password.' };
             }
@@ -155,7 +148,6 @@ export const AuthProvider = ({ children }) => {
                 return { success: false, error: 'Moderator account is disabled.' };
             }
 
-            // Store moderator session
             const modSession = {
                 id: modData.id,
                 name: modData.name,
@@ -174,36 +166,42 @@ export const AuthProvider = ({ children }) => {
 
     const register = async (userData, selectedAccountIds) => {
         try {
-            // Check if user already exists
-            const { data: existingUser } = await supabase
-                .from('users')
-                .select('id')
-                .eq('whatsapp', userData.whatsapp)
-                .single();
+            // 1. Sign up with Supabase Auth
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+                email: userData.email,
+                password: userData.password,
+            });
 
-            if (existingUser) {
-                return { success: false, error: 'A user with this WhatsApp number already exists.' };
-            }
+            if (authError) return { success: false, error: authError.message };
 
-            // Create new user
+            // 2. Create profile in 'users' table
+            // Note: We don't store password_hash anymore
             const { data: newUser, error: createError } = await supabase
                 .from('users')
                 .insert({
+                    created_at: new Date(),
                     name: userData.name,
                     whatsapp: userData.whatsapp,
-                    password_hash: userData.password,
+                    email: userData.email,
                     city: userData.city || null,
                     state: userData.state || null,
                     country: userData.country || null,
                     profile_photo: userData.profile_photo || null,
                     is_active: true
+                    // We can also store auth_id if we add that column later for better linking
                 })
                 .select()
                 .single();
 
-            if (createError) throw createError;
+            if (createError) {
+                // Determine if error is duplicate
+                if (createError.code === '23505') { // Unique violation
+                    return { success: false, error: 'User with this WhatsApp or Email already exists.' };
+                }
+                throw createError;
+            }
 
-            // Link selected accounts
+            // 3. Link selected accounts
             if (selectedAccountIds.length > 0) {
                 const links = selectedAccountIds.map(accountId => ({
                     user_id: newUser.id,
@@ -220,14 +218,43 @@ export const AuthProvider = ({ children }) => {
             return { success: true, user: newUser };
         } catch (error) {
             console.error('Registration error:', error);
-            return { success: false, error: 'An error occurred during registration.' };
+            return { success: false, error: error.message || 'An error occurred during registration.' };
         }
     };
 
-    const logout = () => {
-        localStorage.removeItem('namabank_user');
+    const requestPasswordReset = async (email) => {
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/reset-password`,
+            });
+
+            if (error) return { success: false, error: error.message };
+
+            return { success: true, message: 'Password reset instructions sent to your email.' };
+        } catch (error) {
+            console.error('Reset password error:', error);
+            return { success: false, error: 'Failed to request password reset.' };
+        }
+    };
+
+    const updatePassword = async (newPassword) => {
+        try {
+            const { error } = await supabase.auth.updateUser({ password: newPassword });
+            if (error) return { success: false, error: error.message };
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    };
+
+    const logout = async () => {
+        // Sign out from Supabase
+        await supabase.auth.signOut();
+
+        // Clear local storage for admin/moderator
         localStorage.removeItem('namabank_admin');
         localStorage.removeItem('namabank_moderator');
+
         setUser(null);
         setIsAdmin(false);
         setModerator(null);
@@ -245,7 +272,9 @@ export const AuthProvider = ({ children }) => {
         loginModerator,
         register,
         logout,
-        fetchLinkedAccounts
+        fetchLinkedAccounts,
+        requestPasswordReset,
+        updatePassword
     };
 
     return (

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { getActiveNamaAccounts } from '../services/namaService';
 import PasswordInput from '../components/PasswordInput';
-import { validateName, validatePhone, validatePassword, validatePasswordMatch, formatPhoneNumber, formatName, validateLocation } from '../utils/validation';
+import { validateName, validatePhone, validateEmail, validatePassword, validatePasswordMatch, formatPhoneNumber, formatName, validateLocation } from '../utils/validation';
 import './RegisterPage.css';
 
 const RegisterPage = () => {
@@ -16,6 +16,7 @@ const RegisterPage = () => {
     const [formData, setFormData] = useState({
         name: '',
         whatsapp: '',
+        email: '',
         password: '',
         confirmPassword: '',
         city: '',
@@ -115,6 +116,13 @@ const RegisterPage = () => {
         const phoneValidation = validatePhone(formData.whatsapp);
         if (!phoneValidation.valid) newErrors.whatsapp = phoneValidation.error;
 
+        // Optional email validation - but if entered, must be valid
+        // Actually, let's make it mandatory for password reset flow?
+        // User request "Through email validation to reset password" implies email is needed.
+        // So I will make it mandatory.
+        const emailValidation = validateEmail(formData.email);
+        if (!emailValidation.valid) newErrors.email = emailValidation.error;
+
         const passwordValidation = validatePassword(formData.password);
         if (!passwordValidation.valid) newErrors.password = passwordValidation.error;
 
@@ -148,6 +156,7 @@ const RegisterPage = () => {
             {
                 name: formData.name.trim(),
                 whatsapp: formData.whatsapp.trim(),
+                email: formData.email.trim(),
                 password: formData.password,
                 city: formData.city.trim(),
                 state: formData.state.trim(),
@@ -253,6 +262,21 @@ const RegisterPage = () => {
                                 placeholder="+91 9876543210"
                             />
                             {errors.whatsapp && <span className="form-error">{errors.whatsapp}</span>}
+                            <span className="form-hint">Used for important updates</span>
+                        </div>
+
+                        {/* Email */}
+                        <div className="form-group">
+                            <label className="form-label">Email Address <span className="required">*</span></label>
+                            <input
+                                type="email"
+                                name="email"
+                                value={formData.email}
+                                onChange={handleChange}
+                                className={`form-input ${errors.email ? 'error' : ''}`}
+                                placeholder="john@example.com"
+                            />
+                            {errors.email && <span className="form-error">{errors.email}</span>}
                             <span className="form-hint">This will be your login identifier</span>
                         </div>
 

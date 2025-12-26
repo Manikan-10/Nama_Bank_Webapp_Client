@@ -11,7 +11,15 @@ import {
     getAllNamaEntries,
     getAccountStats,
     getUserAccountLinks,
-    linkUserToAccounts
+    linkUserToAccounts,
+    deleteUser,
+    getAllPrayers,
+    deletePrayer,
+    getBooks,
+    deleteBook,
+    getPendingDeletionRequests,
+    approveAccountDeletion,
+    rejectAccountDeletion
 } from '../services/namaService';
 import { supabase } from '../supabaseClient';
 import ExcelUpload from '../components/ExcelUpload';
@@ -32,6 +40,14 @@ const AdminDashboardPage = () => {
     const [entries, setEntries] = useState([]);
     const [accountStats, setAccountStats] = useState([]);
     const [moderators, setModerators] = useState([]);
+    const [prayers, setPrayers] = useState([]);
+    const [books, setBooks] = useState([]);
+
+    // Deletion Requests state
+    const [deletionRequests, setDeletionRequests] = useState([]);
+
+    // Bulk selection state
+    const [selectedUserIds, setSelectedUserIds] = useState([]);
 
     // Modal states
     const [showAccountModal, setShowAccountModal] = useState(false);
@@ -64,16 +80,22 @@ const AdminDashboardPage = () => {
 
     const loadData = async () => {
         try {
-            const [accountsData, usersData, entriesData, statsData] = await Promise.all([
+            const [accountsData, usersData, entriesData, statsData, prayersData, booksData, deletionRequestsData] = await Promise.all([
                 getAllNamaAccounts(),
                 getAllUsers(),
                 getAllNamaEntries(),
-                getAccountStats()
+                getAccountStats(),
+                getAllPrayers(),
+                getBooks(),
+                getPendingDeletionRequests()
             ]);
             setAccounts(accountsData);
             setUsers(usersData);
             setEntries(entriesData);
             setAccountStats(statsData);
+            setPrayers(prayersData);
+            setBooks(booksData);
+            setDeletionRequests(deletionRequestsData);
 
             // Load moderators
             const { data: modsData } = await supabase.from('moderators').select('*').order('created_at', { ascending: false });
@@ -133,6 +155,141 @@ const AdminDashboardPage = () => {
             loadData();
         } catch (err) {
             error('Failed to update user status');
+        }
+    };
+
+    const handleDeleteUser = async (user) => {
+        if (!confirm(`Are you sure you want to delete user ${user.name}? This action cannot be undone.`)) return;
+
+        try {
+            const { error: rpcError } = await supabase.rpc('admin_delete_user', { target_user_id: user.id });
+            if (rpcError) throw rpcError;
+            success('User deleted successfully');
+            loadData();
+        } catch (err) {
+            console.error('Delete user error:', err);
+            error(err.message || 'Failed to delete user');
+        }
+    };
+
+    const handleDeletePrayer = async (id) => {
+        if (!confirm('Are you sure you want to delete this prayer?')) return;
+        try {
+            const { error: rpcError } = await supabase.rpc('admin_delete_prayer', { target_prayer_id: id });
+            if (rpcError) throw rpcError;
+            success('Prayer deleted');
+            loadData();
+        } catch (err) {
+            console.error('Delete prayer error:', err);
+            error(err.message || 'Failed to delete prayer');
+        }
+    };
+
+    const handleDeleteBook = async (book) => {
+        if (!confirm('Are you sure you want to delete this book?')) return;
+        try {
+            const { error: rpcError } = await supabase.rpc('admin_delete_book', { target_book_id: book.id });
+            if (rpcError) throw rpcError;
+
+            // Also try to delete from storage (best effort)
+            if (book.file_url) {
+                try {
+                    const path = book.file_url.split('library/').pop();
+                    if (path) {
+                        await supabase.storage.from('library').remove([path]);
+                    }
+                } catch (storageErr) {
+                    console.warn('Could not delete file from storage:', storageErr);
+                }
+            }
+
+            success('Book deleted successfully');
+            loadData();
+        } catch (err) {
+            console.error('Delete book error:', err);
+            error(err.message || 'Failed to delete book');
+        }
+    };
+
+    // Account Deletion Handlers
+    const handleApproveAccountDeletion = async (requestId) => {
+        if (!confirm('Are you sure you want to approve this deletion? The account will be permanently deleted.')) return;
+        try {
+            await approveAccountDeletion(requestId);
+            success('Account deleted successfully');
+            loadData();
+        } catch (err) {
+            console.error('Approve deletion error:', err);
+            error(err.message || 'Failed to approve deletion');
+        }
+    };
+
+    const handleRejectAccountDeletion = async (requestId) => {
+        if (!confirm('Reject this deletion request?')) return;
+        try {
+            await rejectAccountDeletion(requestId);
+            success('Deletion request rejected');
+            loadData();
+        } catch (err) {
+            console.error('Reject deletion error:', err);
+            error(err.message || 'Failed to reject request');
+        }
+    };
+
+    const handleDirectDeleteAccount = async (account) => {
+        if (!confirm(`Permanently delete "${account.name}"? This will also delete all user links and entries.`)) return;
+        try {
+            const { error: rpcError } = await supabase.rpc('admin_delete_account', { target_account_id: account.id });
+            if (rpcError) throw rpcError;
+            success('Account deleted successfully');
+            loadData();
+        } catch (err) {
+            console.error('Direct delete error:', err);
+            error(err.message || 'Failed to delete account');
+        }
+    };
+
+    // Bulk Actions Setup
+    const handleSelectAll = (e) => {
+        if (e.target.checked) {
+            setSelectedUserIds(users.map(u => u.id));
+        } else {
+            setSelectedUserIds([]);
+        }
+    };
+
+    const handleSelectUser = (id) => {
+        setSelectedUserIds(prev =>
+            prev.includes(id) ? prev.filter(uid => uid !== id) : [...prev, id]
+        );
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedUserIds.length === 0) return;
+        if (!confirm(`Are you sure you want to delete ${selectedUserIds.length} users? This action cannot be undone.`)) return;
+
+        try {
+            let successCount = 0;
+            for (const userId of selectedUserIds) {
+                try {
+                    const { error: rpcError } = await supabase.rpc('admin_delete_user', { target_user_id: userId });
+                    if (!rpcError) successCount++;
+                } catch (err) {
+                    console.error(`Failed to delete user ${userId}`, err);
+                }
+            }
+
+            if (successCount === selectedUserIds.length) {
+                success(`Successfully deleted ${successCount} users.`);
+            } else {
+                success(`Deleted ${successCount} out of ${selectedUserIds.length} users. Some failed.`);
+            }
+
+            setSelectedUserIds([]);
+            loadData();
+        } catch (err) {
+            console.error('Bulk delete error:', err);
+            error('An error occurred during bulk deletion.');
         }
     };
 
@@ -249,17 +406,30 @@ const AdminDashboardPage = () => {
         if (!confirm('Are you sure you want to delete this moderator?')) return;
 
         try {
-            const { error: deleteError } = await supabase
-                .from('moderators')
-                .delete()
-                .eq('id', id);
+            // Use RPC to handle dependencies (prayers, accounts, etc.)
+            const { error: rpcError } = await supabase.rpc('admin_delete_moderator', {
+                target_moderator_id: id
+            });
 
-            if (deleteError) throw deleteError;
+            if (rpcError) {
+                // Determine if error is simply "function not found"
+                if (rpcError.code === '42883') { // undefined_function
+                    console.warn('admin_delete_moderator RPC not found. Trying direct delete (may fail)...');
+                    const { error: customError } = await supabase
+                        .from('moderators')
+                        .delete()
+                        .eq('id', id);
+                    if (customError) throw customError;
+                } else {
+                    throw rpcError;
+                }
+            }
 
             success('Moderator deleted');
             loadData();
         } catch (err) {
-            error('Failed to delete moderator');
+            console.error('Failed to delete moderator:', err);
+            error(err.message || 'Failed to delete moderator');
         }
     };
 
@@ -355,6 +525,16 @@ const AdminDashboardPage = () => {
                             </svg>
                             Moderators
                         </button>
+                        <button
+                            className={`nav-tab ${activeTab === 'prayers' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('prayers')}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                            </svg>
+                            Prayers & Books
+                        </button>
                     </div>
                 </div>
             </nav>
@@ -427,6 +607,13 @@ const AdminDashboardPage = () => {
                                                                 >
                                                                     {account.is_active ? 'Disable' : 'Enable'}
                                                                 </button>
+                                                                <button
+                                                                    className="btn btn-sm btn-ghost"
+                                                                    onClick={() => handleDirectDeleteAccount(account)}
+                                                                    style={{ color: '#ef4444' }}
+                                                                >
+                                                                    Delete
+                                                                </button>
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -434,6 +621,52 @@ const AdminDashboardPage = () => {
                                             </tbody>
                                         </table>
                                     </div>
+
+                                    {/* Pending Deletion Requests Section */}
+                                    {deletionRequests.length > 0 && (
+                                        <div style={{ marginTop: '30px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
+                                            <h3 style={{ color: 'var(--text-color)', marginBottom: '15px' }}>
+                                                Pending Deletion Requests ({deletionRequests.length})
+                                            </h3>
+                                            <div className="table-container">
+                                                <table className="table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Account Name</th>
+                                                            <th>Requested By</th>
+                                                            <th>Requested At</th>
+                                                            <th>Actions</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {deletionRequests.map(req => (
+                                                            <tr key={req.id}>
+                                                                <td><strong>{req.nama_accounts?.name || 'Unknown'}</strong></td>
+                                                                <td>{req.moderators?.name || 'Unknown'}</td>
+                                                                <td>{formatDate(req.created_at)}</td>
+                                                                <td>
+                                                                    <div className="action-buttons">
+                                                                        <button
+                                                                            className="btn btn-sm btn-primary"
+                                                                            onClick={() => handleApproveAccountDeletion(req.id)}
+                                                                        >
+                                                                            Approve
+                                                                        </button>
+                                                                        <button
+                                                                            className="btn btn-sm btn-ghost"
+                                                                            onClick={() => handleRejectAccountDeletion(req.id)}
+                                                                        >
+                                                                            Reject
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
                                 </section>
                             )}
 
@@ -442,23 +675,46 @@ const AdminDashboardPage = () => {
                                 <section className="admin-section">
                                     <div className="section-header">
                                         <h2>Registered Users ({users.length})</h2>
-                                        <button
-                                            className="btn btn-primary"
-                                            onClick={() => setShowBulkUploadModal(true)}
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                                <polyline points="17 8 12 3 7 8" />
-                                                <line x1="12" y1="3" x2="12" y2="15" />
-                                            </svg>
-                                            Bulk Upload
-                                        </button>
+                                        <div style={{ display: 'flex', gap: '10px' }}>
+                                            {selectedUserIds.length > 0 && (
+                                                <button
+                                                    className="btn btn-danger"
+                                                    onClick={handleBulkDelete}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#ef4444', color: 'white' }}
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                    </svg>
+                                                    Delete Selected ({selectedUserIds.length})
+                                                </button>
+                                            )}
+                                            <button
+                                                className="btn btn-primary"
+                                                onClick={() => setShowBulkUploadModal(true)}
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                                    <polyline points="17 8 12 3 7 8" />
+                                                    <line x1="12" y1="3" x2="12" y2="15" />
+                                                </svg>
+                                                Bulk Upload
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <div className="table-container">
                                         <table className="table">
                                             <thead>
                                                 <tr>
+                                                    <th style={{ width: '40px' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={users.length > 0 && selectedUserIds.length === users.length}
+                                                            onChange={handleSelectAll}
+                                                            style={{ cursor: 'pointer' }}
+                                                        />
+                                                    </th>
                                                     <th>Name</th>
                                                     <th>WhatsApp</th>
                                                     <th>Location</th>
@@ -470,6 +726,14 @@ const AdminDashboardPage = () => {
                                             <tbody>
                                                 {users.map(user => (
                                                     <tr key={user.id}>
+                                                        <td>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedUserIds.includes(user.id)}
+                                                                onChange={() => handleSelectUser(user.id)}
+                                                                style={{ cursor: 'pointer' }}
+                                                            />
+                                                        </td>
                                                         <td><strong>{user.name}</strong></td>
                                                         <td>{user.whatsapp}</td>
                                                         <td>
@@ -496,6 +760,12 @@ const AdminDashboardPage = () => {
                                                                     onClick={() => handleToggleUserStatus(user)}
                                                                 >
                                                                     {user.is_active ? 'Disable' : 'Enable'}
+                                                                </button>
+                                                                <button
+                                                                    className="btn btn-sm btn-ghost btn-danger"
+                                                                    onClick={() => handleDeleteUser(user)}
+                                                                >
+                                                                    Delete
                                                                 </button>
                                                             </div>
                                                         </td>
@@ -647,9 +917,93 @@ const AdminDashboardPage = () => {
                                             </table>
                                         </div>
                                     )}
+                                </section>
+                            )}
 
-                                    <div className="admin-note">
-                                        <p><strong>Note:</strong> Moderators can add and rename Nama Bank accounts, but cannot delete accounts or manage users.</p>
+                            {/* Prayers & Books Tab */}
+                            {activeTab === 'prayers' && (
+                                <section className="admin-section">
+                                    <div className="section-header">
+                                        <h2>Prayers & Books Management</h2>
+                                    </div>
+
+                                    <div className="admin-grid-layout" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem' }}>
+                                        {/* Prayers Section */}
+                                        <div className="subsection">
+                                            <h3>Prayers ({prayers.length})</h3>
+                                            <div className="table-container" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                                <table className="table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Name</th>
+                                                            <th>Prayer</th>
+                                                            <th>Status</th>
+                                                            <th>Date</th>
+                                                            <th>Action</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {prayers.map(prayer => (
+                                                            <tr key={prayer.id}>
+                                                                <td>{prayer.privacy === 'anonymous' ? 'Anonymous' : prayer.name}</td>
+                                                                <td style={{ maxWidth: '300px' }}><div className="truncate-text" title={prayer.prayer_text}>{prayer.prayer_text}</div></td>
+                                                                <td>
+                                                                    <span className={`badge badge-${prayer.status === 'approved' ? 'success' : prayer.status === 'pending' ? 'warning' : 'error'}`}>
+                                                                        {prayer.status}
+                                                                    </span>
+                                                                </td>
+                                                                <td>{formatDate(prayer.created_at)}</td>
+                                                                <td>
+                                                                    <button
+                                                                        className="btn btn-sm btn-ghost btn-danger"
+                                                                        onClick={() => handleDeletePrayer(prayer.id)}
+                                                                    >
+                                                                        Delete
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        {/* Books Section */}
+                                        <div className="subsection">
+                                            <h3>Books ({books.length})</h3>
+                                            <div className="table-container" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                                <table className="table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Title</th>
+                                                            <th>Info</th>
+                                                            <th>Views</th>
+                                                            <th>Action</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {books.map(book => (
+                                                            <tr key={book.id}>
+                                                                <td>
+                                                                    <strong>{book.title}</strong><br />
+                                                                    <a href={book.file_url} target="_blank" className="text-sm link">Open PDF</a>
+                                                                </td>
+                                                                <td>{book.month} {book.year} • {book.language}</td>
+                                                                <td>{book.view_count}</td>
+                                                                <td>
+                                                                    <button
+                                                                        className="btn btn-sm btn-ghost btn-danger"
+                                                                        onClick={() => handleDeleteBook(book)}
+                                                                    >
+                                                                        Delete
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
                                     </div>
                                 </section>
                             )}

@@ -14,11 +14,23 @@ import {
     rejectPrayer,
     bulkCreateUsers,
     getBooks,
-    deleteBook
+    deleteBook,
+    deleteUser,
+    deletePrayer,
+    getAllPrayers,
+    requestAccountDeletion,
+    getAccountStats
 } from '../services/namaService';
+import { supabase } from '../supabaseClient';
 import ExcelUpload from '../components/ExcelUpload';
 import BookUpload from '../components/BookUpload';
+import {
+    LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area,
+    XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from 'recharts';
 import './ModeratorDashboardPage.css';
+
+const COLORS = ['#FF9933', '#8B0000', '#4CAF50', '#2196F3', '#9C27B0', '#FF5722', '#00BCD4', '#E91E63'];
 
 const ModeratorDashboardPage = () => {
     const { moderator, logout } = useAuth();
@@ -53,6 +65,21 @@ const ModeratorDashboardPage = () => {
     // Books state
     const [books, setBooks] = useState([]);
 
+    const [accountStats, setAccountStats] = useState([]);
+    const [selectedExportAccounts, setSelectedExportAccounts] = useState([]);
+    const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+
+    // Chart Data State
+    const [dailyData, setDailyData] = useState([]);
+    const [weeklyData, setWeeklyData] = useState([]);
+    const [sourceRatio, setSourceRatio] = useState([]);
+    const [cityStats, setCityStats] = useState([]);
+    const [newDevotees, setNewDevotees] = useState([]);
+    const [topGrowing, setTopGrowing] = useState([]);
+
+    // Bulk Selection State
+    const [selectedUserIds, setSelectedUserIds] = useState([]);
+
     // Convert number to Indian numbering words (lacs, crores)
     const numberToWords = (num) => {
         if (!num || isNaN(num)) return '';
@@ -73,21 +100,150 @@ const ModeratorDashboardPage = () => {
 
     const loadData = async () => {
         try {
-            const [accountsData, usersData, prayersData, booksData] = await Promise.all([
+            const [accountsData, usersData, prayersData, booksData, statsData] = await Promise.all([
                 getAllNamaAccounts(),
                 getAllUsers(),
-                getPendingPrayers(),
-                getBooks()
+                getAllPrayers(),
+                getBooks(),
+                getAccountStats()
             ]);
             setAccounts(accountsData);
             setUsers(usersData);
             setPrayers(prayersData);
             setBooks(booksData);
+            setAccountStats(statsData);
+
+            // Load additional report stats
+            loadReportStats();
         } catch (err) {
             console.error('Error loading data:', err);
         } finally {
             setLoading(false);
         }
+    };
+
+    const loadReportStats = async () => {
+        try {
+            await Promise.all([
+                loadDailyData(),
+                loadWeeklyData(),
+                loadSourceRatio(),
+                loadCityStats(),
+                loadNewDevotees(),
+                loadTopGrowing()
+            ]);
+        } catch (err) {
+            console.error('Error loading report stats:', err);
+        }
+    };
+
+    const loadDailyData = async () => {
+        const last7Days = [];
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            last7Days.push(date.toISOString().split('T')[0]);
+        }
+        const { data } = await supabase
+            .from('nama_entries')
+            .select('count, entry_date')
+            .gte('entry_date', last7Days[0]);
+        const dailyTotals = last7Days.map(date => {
+            const dayEntries = (data || []).filter(e => e.entry_date === date);
+            const total = dayEntries.reduce((sum, e) => sum + e.count, 0);
+            return {
+                date: new Date(date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' }),
+                count: total
+            };
+        });
+        setDailyData(dailyTotals);
+    };
+
+    const loadWeeklyData = async () => {
+        const last4Weeks = [];
+        for (let i = 3; i >= 0; i--) {
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - (i * 7) - 6);
+            const endDate = new Date();
+            endDate.setDate(endDate.getDate() - (i * 7));
+            last4Weeks.push({
+                label: `Week ${4 - i}`,
+                start: startDate.toISOString().split('T')[0],
+                end: endDate.toISOString().split('T')[0]
+            });
+        }
+        const { data } = await supabase.from('nama_entries').select('count, entry_date');
+        const weeklyTotals = last4Weeks.map(week => {
+            const weekEntries = (data || []).filter(e => e.entry_date >= week.start && e.entry_date <= week.end);
+            return {
+                week: week.label,
+                count: weekEntries.reduce((sum, e) => sum + e.count, 0)
+            };
+        });
+        setWeeklyData(weeklyTotals);
+    };
+
+    const loadSourceRatio = async () => {
+        const { data } = await supabase.from('nama_entries').select('source_type, count');
+        const manual = (data || []).filter(e => e.source_type === 'manual').reduce((sum, e) => sum + e.count, 0);
+        const audio = (data || []).filter(e => e.source_type === 'audio').reduce((sum, e) => sum + e.count, 0);
+        setSourceRatio([
+            { name: 'Manual', value: manual },
+            { name: 'Audio', value: audio }
+        ]);
+    };
+
+    const loadCityStats = async () => {
+        const { data: users } = await supabase.from('users').select('id, city');
+        const { data: entries } = await supabase.from('nama_entries').select('user_id, count');
+        const cityMap = {};
+        (users || []).forEach(user => {
+            if (user.city) {
+                if (!cityMap[user.city]) cityMap[user.city] = { city: user.city, count: 0 };
+                const userEntries = (entries || []).filter(e => e.user_id === user.id);
+                cityMap[user.city].count += userEntries.reduce((sum, e) => sum + e.count, 0);
+            }
+        });
+        const sorted = Object.values(cityMap).sort((a, b) => b.count - a.count).slice(0, 6);
+        setCityStats(sorted);
+    };
+
+    const loadNewDevotees = async () => {
+        const last7Days = [];
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            last7Days.push(date.toISOString().split('T')[0]);
+        }
+        const { data } = await supabase.from('users').select('created_at');
+        const dailyNew = last7Days.map(date => {
+            const count = (data || []).filter(u => u.created_at?.split('T')[0] === date).length;
+            return {
+                date: new Date(date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' }),
+                count
+            };
+        });
+        setNewDevotees(dailyNew);
+    };
+
+    const loadTopGrowing = async () => {
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() - 7);
+        const { data } = await supabase
+            .from('nama_entries')
+            .select('account_id, count, nama_accounts(name)')
+            .gte('entry_date', weekStart.toISOString().split('T')[0]);
+        const accountMap = {};
+        (data || []).forEach(entry => {
+            const name = entry.nama_accounts?.name || 'Unknown';
+            if (!accountMap[name]) accountMap[name] = 0;
+            accountMap[name] += entry.count;
+        });
+        const sorted = Object.entries(accountMap)
+            .map(([name, count]) => ({ name: name.length > 15 ? name.substring(0, 15) + '...' : name, growth: count }))
+            .sort((a, b) => b.growth - a.growth)
+            .slice(0, 5);
+        setTopGrowing(sorted);
     };
 
     // Prayer approval handlers
@@ -116,12 +272,69 @@ const ModeratorDashboardPage = () => {
     const handleDeleteBook = async (book) => {
         if (!confirm('Are you sure you want to delete this book?')) return;
         try {
-            await deleteBook(book.id, book.file_url);
+            await deleteBook(book.id, book.file_url, moderator?.id);
             success('Book deleted successfully');
             loadData();
         } catch (err) {
             console.error('Error deleting book:', err);
             error('Failed to delete book');
+        }
+    };
+
+    const handleDeleteUser = async (user) => {
+        if (!confirm(`Are you sure you want to delete user ${user.name}? This action cannot be undone.`)) return;
+
+        try {
+            await deleteUser(user.id, moderator?.id);
+            success('User deleted successfully');
+            loadData();
+        } catch (err) {
+            console.error('Delete user error:', err);
+            error(err.message || 'Failed to delete user');
+        }
+    };
+
+    // Bulk Actions
+    const handleSelectAll = (e) => {
+        if (e.target.checked) {
+            setSelectedUserIds(users.map(u => u.id));
+        } else {
+            setSelectedUserIds([]);
+        }
+    };
+
+    const handleSelectUser = (id) => {
+        setSelectedUserIds(prev =>
+            prev.includes(id) ? prev.filter(uid => uid !== id) : [...prev, id]
+        );
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedUserIds.length === 0) return;
+        if (!confirm(`Are you sure you want to delete ${selectedUserIds.length} users? This action cannot be undone.`)) return;
+
+        try {
+            let successCount = 0;
+            for (const userId of selectedUserIds) {
+                try {
+                    await deleteUser(userId, moderator?.id);
+                    successCount++;
+                } catch (err) {
+                    console.error(`Failed to delete user ${userId}`, err);
+                }
+            }
+
+            if (successCount === selectedUserIds.length) {
+                success(`Successfully deleted ${successCount} users.`);
+            } else {
+                success(`Deleted ${successCount} out of ${selectedUserIds.length} users. Some failed.`);
+            }
+
+            setSelectedUserIds([]);
+            loadData();
+        } catch (err) {
+            console.error('Bulk delete error:', err);
+            error('An error occurred during bulk deletion.');
         }
     };
 
@@ -223,6 +436,186 @@ const ModeratorDashboardPage = () => {
         });
     };
 
+    const formatNumber = (num) => {
+        return num?.toLocaleString() || '0';
+    };
+
+    const getFilteredStats = () => {
+        if (selectedExportAccounts.length === 0) return accountStats;
+        return accountStats.filter(a => selectedExportAccounts.includes(a.id));
+    };
+
+    const toggleAccountSelection = (id) => {
+        setSelectedExportAccounts(prev => {
+            if (prev.includes(id)) return prev.filter(p => p !== id);
+            return [...prev, id];
+        });
+    };
+
+    const exportToCSV = () => {
+        const statsToExport = getFilteredStats();
+        const headers = ['Account Name', 'Today', 'This Week', 'This Month', 'This Year', 'Overall'];
+        const rows = statsToExport.map(a => [a.name, a.today, a.thisWeek, a.thisMonth, a.thisYear, a.overall]);
+        const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `nama_bank_report_${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+    };
+
+    const exportToExcel = async () => {
+        const XLSX = await import('xlsx');
+        const wb = XLSX.utils.book_new();
+        const statsToExport = getFilteredStats();
+
+        const wsSummary = XLSX.utils.json_to_sheet(statsToExport.map(a => ({
+            'Account Name': a.name, 'Today': a.today, 'This Week': a.thisWeek,
+            'This Month': a.thisMonth, 'This Year': a.thisYear, 'Overall': a.overall
+        })));
+        XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+        for (const account of statsToExport) {
+            try {
+                const { data } = await supabase
+                    .from('nama_entries')
+                    .select('entry_date, count')
+                    .eq('account_id', account.id)
+                    .order('entry_date', { ascending: true });
+
+                if (data && data.length > 0) {
+                    const dateMap = {};
+                    data.forEach(e => {
+                        if (!dateMap[e.entry_date]) dateMap[e.entry_date] = 0;
+                        dateMap[e.entry_date] += e.count;
+                    });
+                    const rows = Object.keys(dateMap).sort().map(date => ({
+                        Date: date,
+                        Count: dateMap[date]
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(rows);
+                    const invalidChars = new RegExp('[*?:/[\\]\\\\]', 'g');
+                    let sheetName = account.name.replace(invalidChars, ' ').substring(0, 31);
+                    let uniqueName = sheetName;
+                    let counter = 1;
+                    while (wb.SheetNames.includes(uniqueName)) {
+                        uniqueName = sheetName.substring(0, 28) + ' ' + counter;
+                        counter++;
+                    }
+                    XLSX.utils.book_append_sheet(wb, ws, uniqueName);
+                }
+            } catch (err) {
+                console.error(`Error filtering data for ${account.name}:`, err);
+            }
+        }
+
+        // Add a Guide sheet
+        const guideData = [
+            ['How to use this report'],
+            [''],
+            ['1. Summary Sheet', 'Provides a high-level overview of total Namas per account.'],
+            ['2. Account Sheets', 'Contains daily time-series data for individual accounts.'],
+            [''],
+            ['Creating Graphs in Excel:'],
+            ['1. Go to any account sheet (e.g., "UK Nama Bank").'],
+            ['2. Select all data in columns A and B.'],
+            ['3. Go to the "Insert" tab in the Excel ribbon.'],
+            ['4. Choose "Recommended Charts" or select a "Line Chart".'],
+            ['5. Your graph will appear automatically based on the date and count!']
+        ];
+        const wsGuide = XLSX.utils.aoa_to_sheet(guideData);
+        XLSX.utils.book_append_sheet(wb, wsGuide, 'Report Guide');
+
+        XLSX.writeFile(wb, `nama_bank_report_${new Date().toISOString().split('T')[0]}.xlsx`);
+    };
+
+    const exportToPDF = async () => {
+        const { jsPDF } = await import('jspdf');
+        const html2canvas = (await import('html2canvas')).default;
+
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+
+        // Title
+        doc.setFontSize(22);
+        doc.setTextColor(255, 153, 51); // saffron
+        doc.text('Nama Bank - Moderator Report', pageWidth / 2, 20, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, pageWidth / 2, 28, { align: 'center' });
+
+        // Summary Table Header
+        doc.setFontSize(14);
+        doc.setTextColor(0);
+        doc.text('Account Summary', 20, 45);
+
+        // Simple table
+        const statsToExport = getFilteredStats();
+        let y = 55;
+        doc.setFontSize(10);
+
+        // Table Headers
+        doc.setFillColor(245, 245, 245);
+        doc.rect(20, y - 5, pageWidth - 40, 7, 'F');
+        doc.text('Account Name', 25, y);
+        doc.text('Today', 100, y);
+        doc.text('This Week', 125, y);
+        doc.text('Overall', 160, y);
+        y += 10;
+
+        statsToExport.forEach(account => {
+            if (y > pageHeight - 40) {
+                doc.addPage();
+                y = 20;
+            }
+            doc.text(account.name, 25, y);
+            doc.text(formatNumber(account.today), 100, y);
+            doc.text(formatNumber(account.thisWeek), 125, y);
+            doc.text(formatNumber(account.overall), 160, y);
+            doc.setDrawColor(240);
+            doc.line(20, y + 2, pageWidth - 20, y + 2);
+            y += 10;
+        });
+
+        // Capture Charts
+        try {
+            const chartsGrid = document.querySelector('.charts-grid');
+            if (chartsGrid) {
+                doc.addPage();
+                doc.setFontSize(16);
+                doc.text('Visual Analytics', pageWidth / 2, 20, { align: 'center' });
+
+                success('Capturing charts for report... please wait.');
+
+                const canvas = await html2canvas(chartsGrid, {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: '#ffffff'
+                });
+
+                const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                const imgWidth = pageWidth - 40;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+                // If it's too tall, we might need to split it, but usually standard grid fits one page
+                if (imgHeight > pageHeight - 40) {
+                    doc.addImage(imgData, 'JPEG', 20, 30, imgWidth, pageHeight - 50);
+                } else {
+                    doc.addImage(imgData, 'JPEG', 20, 30, imgWidth, imgHeight);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to capture charts for PDF:', err);
+        }
+
+        doc.save(`nama_bank_full_report_${new Date().toISOString().split('T')[0]}.pdf`);
+        success('Full report downloaded!');
+    };
+
     const handleAddAccount = async (e) => {
         e.preventDefault();
         if (!newAccountData.name.trim()) {
@@ -278,6 +671,7 @@ const ModeratorDashboardPage = () => {
             setSelectedAccount(null);
             loadData();
         } catch (err) {
+            console.error('Update account error:', err);
             error('Failed to update account. Please try again.');
         } finally {
             setSaving(false);
@@ -336,6 +730,12 @@ const ModeratorDashboardPage = () => {
                         >
                             Books ({books.length})
                         </button>
+                        <button
+                            className={`tab-btn ${activeTab === 'reports' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('reports')}
+                        >
+                            Reports
+                        </button>
                     </div>
 
                     {/* Nama Bank Accounts Tab */}
@@ -388,6 +788,22 @@ const ModeratorDashboardPage = () => {
                                                     </svg>
                                                     Edit
                                                 </button>
+                                                <button
+                                                    className="btn btn-ghost btn-sm"
+                                                    onClick={async () => {
+                                                        if (!confirm(`Request deletion of "${account.name}"? Admin approval required.`)) return;
+                                                        try {
+                                                            await requestAccountDeletion(account.id, moderator?.id, 'Deletion requested by moderator');
+                                                            success('Deletion request sent to Admin for approval.');
+                                                        } catch (err) {
+                                                            console.error('Request deletion error:', err);
+                                                            error(err.message || 'Failed to send deletion request');
+                                                        }
+                                                    }}
+                                                    style={{ color: '#f59e0b' }}
+                                                >
+                                                    Request Delete
+                                                </button>
                                             </div>
                                         </div>
                                     ))}
@@ -412,6 +828,15 @@ const ModeratorDashboardPage = () => {
                                     </svg>
                                     Bulk Upload
                                 </button>
+                                {selectedUserIds.length > 0 && (
+                                    <button
+                                        className="btn btn-danger"
+                                        onClick={handleBulkDelete}
+                                        style={{ marginLeft: '10px' }}
+                                    >
+                                        Delete Selected ({selectedUserIds.length})
+                                    </button>
+                                )}
                             </div>
 
                             {loading ? (
@@ -428,6 +853,13 @@ const ModeratorDashboardPage = () => {
                                     <table className="users-table">
                                         <thead>
                                             <tr>
+                                                <th style={{ width: '40px' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        onChange={handleSelectAll}
+                                                        checked={users.length > 0 && selectedUserIds.length === users.length}
+                                                    />
+                                                </th>
                                                 <th>Name</th>
                                                 <th>WhatsApp</th>
                                                 <th>Location</th>
@@ -437,7 +869,14 @@ const ModeratorDashboardPage = () => {
                                         </thead>
                                         <tbody>
                                             {users.map(user => (
-                                                <tr key={user.id}>
+                                                <tr key={user.id} className={selectedUserIds.includes(user.id) ? 'selected-row' : ''}>
+                                                    <td>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedUserIds.includes(user.id)}
+                                                            onChange={() => handleSelectUser(user.id)}
+                                                        />
+                                                    </td>
                                                     <td><strong>{user.name}</strong></td>
                                                     <td>{user.whatsapp}</td>
                                                     <td>
@@ -453,6 +892,13 @@ const ModeratorDashboardPage = () => {
                                                         >
                                                             Allocate Banks
                                                         </button>
+                                                        <button
+                                                            className="btn btn-ghost btn-sm btn-danger"
+                                                            onClick={() => handleDeleteUser(user)}
+                                                            style={{ marginLeft: '0.5rem', color: '#ef4444' }}
+                                                        >
+                                                            Delete
+                                                        </button>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -466,8 +912,9 @@ const ModeratorDashboardPage = () => {
                     {/* Prayers Tab */}
                     {activeTab === 'prayers' && (
                         <section className="accounts-section">
+                            {/* Pending Prayers Section */}
                             <div className="section-header">
-                                <h2>Pending Prayer Requests</h2>
+                                <h2>Pending Prayer Requests ({prayers.filter(p => p.status === 'pending').length})</h2>
                             </div>
 
                             {loading ? (
@@ -475,13 +922,13 @@ const ModeratorDashboardPage = () => {
                                     <span className="loader"></span>
                                     <p>Loading prayers...</p>
                                 </div>
-                            ) : prayers.length === 0 ? (
-                                <div className="empty-state">
+                            ) : prayers.filter(p => p.status === 'pending').length === 0 ? (
+                                <div className="empty-state" style={{ marginBottom: '2rem' }}>
                                     <p>No pending prayer requests.</p>
                                 </div>
                             ) : (
-                                <div className="prayer-cards">
-                                    {prayers.map(prayer => (
+                                <div className="prayer-cards" style={{ marginBottom: '2rem' }}>
+                                    {prayers.filter(p => p.status === 'pending').map(prayer => (
                                         <div key={prayer.id} className="prayer-review-card">
                                             <div className="prayer-meta">
                                                 <span className="prayer-author">
@@ -511,6 +958,67 @@ const ModeratorDashboardPage = () => {
                                             </div>
                                         </div>
                                     ))}
+                                </div>
+                            )}
+
+                            {/* Approved/Active Prayers Section */}
+                            <div className="section-header" style={{ marginTop: '30px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
+                                <h2>Approved Prayers ({prayers.filter(p => p.status === 'approved').length})</h2>
+                            </div>
+
+                            {prayers.filter(p => p.status === 'approved').length === 0 ? (
+                                <div className="empty-state">
+                                    <p>No active prayers currently.</p>
+                                </div>
+                            ) : (
+                                <div className="table-container">
+                                    <table className="users-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Prayer</th>
+                                                <th>Date</th>
+                                                <th>Privacy</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {prayers.filter(p => p.status === 'approved').map(prayer => (
+                                                <tr key={prayer.id}>
+                                                    <td><strong>{prayer.privacy === 'anonymous' ? 'Anonymous' : prayer.name}</strong></td>
+                                                    <td>
+                                                        <div style={{ maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={prayer.prayer_text}>
+                                                            {prayer.prayer_text}
+                                                        </div>
+                                                    </td>
+                                                    <td>{formatDate(prayer.created_at)}</td>
+                                                    <td>{prayer.privacy}</td>
+                                                    <td>
+                                                        <button
+                                                            className="btn btn-ghost btn-sm btn-danger"
+                                                            onClick={async () => {
+                                                                if (!confirm('Are you sure? This will delete the prayer.')) return;
+                                                                try {
+                                                                    // As moderator, direct delete might fail if we don't use a secure function or reuse reject logic
+                                                                    // Reusing reject logic (which deletes) is simplest if 'rejectPrayer' implementation deletes.
+                                                                    // Checking rejectPrayer implementation...
+                                                                    await deletePrayer(prayer.id, moderator?.id);
+                                                                    success('Prayer deleted');
+                                                                    loadData();
+                                                                } catch (e) {
+                                                                    console.error(e);
+                                                                    error('Failed to delete');
+                                                                }
+                                                            }}
+                                                            style={{ color: '#ef4444' }}
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
                             )}
                         </section>
@@ -578,213 +1086,367 @@ const ModeratorDashboardPage = () => {
                             )}
                         </section>
                     )}
-                </div>
-            </main>
 
-            {/* Add Account Modal */}
-            {showAddModal && (
-                <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Add New Nama Bank Account</h2>
-                            <button className="modal-close" onClick={() => setShowAddModal(false)}>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="18" y1="6" x2="6" y2="18" />
-                                    <line x1="6" y1="6" x2="18" y2="18" />
-                                </svg>
-                            </button>
-                        </div>
-                        <form onSubmit={handleAddAccount}>
-                            <div className="modal-body">
-                                <div className="form-group">
-                                    <label className="form-label">Account Name <span className="required">*</span></label>
-                                    <input
-                                        type="text"
-                                        value={newAccountData.name}
-                                        onChange={(e) => setNewAccountData(prev => ({ ...prev, name: e.target.value }))}
-                                        className="form-input"
-                                        placeholder="e.g., Vizag Nama Bank"
-                                        autoFocus
-                                    />
-                                </div>
-                                <div className="form-row" style={{ display: 'flex', flexDirection: 'row', gap: '16px' }}>
-                                    <div className="form-group" style={{ flex: 1 }}>
-                                        <label className="form-label">Start Date <span className="required">*</span></label>
-                                        <input
-                                            type="date"
-                                            value={newAccountData.start_date}
-                                            onChange={(e) => setNewAccountData(prev => ({ ...prev, start_date: e.target.value }))}
-                                            className="form-input"
-                                        />
-                                    </div>
-                                    <div className="form-group" style={{ flex: 1 }}>
-                                        <label className="form-label">End Date</label>
-                                        <input
-                                            type="date"
-                                            value={newAccountData.end_date}
-                                            onChange={(e) => setNewAccountData(prev => ({ ...prev, end_date: e.target.value }))}
-                                            className="form-input"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Target Goal</label>
-                                    <input
-                                        type="number"
-                                        value={newAccountData.target_goal}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            if (val.length <= 15) {
-                                                setNewAccountData(prev => ({ ...prev, target_goal: val }));
-                                            }
-                                        }}
-                                        className="form-input"
-                                        placeholder="e.g., 1000000"
-                                        min="0"
-                                        max="999999999999999"
-                                    />
-                                    {newAccountData.target_goal && (
-                                        <span className="form-hint target-label">{numberToWords(newAccountData.target_goal)}</span>
+                    {/* Reports Tab */}
+                    {activeTab === 'reports' && (
+                        <section className="accounts-section">
+                            <div className="section-header">
+                                <h2>Account Reports</h2>
+                                <div className="export-controls" style={{ position: 'relative' }}>
+                                    <button
+                                        className="btn btn-secondary btn-sm"
+                                        onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+                                    >
+                                        Export Options {selectedExportAccounts.length > 0 && `(${selectedExportAccounts.length})`}
+                                    </button>
+
+                                    {isExportMenuOpen && (
+                                        <div className="export-menu" style={{
+                                            position: 'absolute',
+                                            right: 0,
+                                            top: '100%',
+                                            width: '300px',
+                                            background: 'white',
+                                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                            borderRadius: '8px',
+                                            padding: '16px',
+                                            zIndex: 100,
+                                            border: '1px solid #eee'
+                                        }}>
+                                            <div className="account-selector">
+                                                <h4 style={{ marginBottom: '10px' }}>Select Accounts:</h4>
+                                                <div className="account-checkboxes" style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedExportAccounts.length === 0}
+                                                            onChange={() => setSelectedExportAccounts([])}
+                                                        />
+                                                        All Accounts
+                                                    </label>
+                                                    {accountStats.map(acc => (
+                                                        <label key={acc.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedExportAccounts.includes(acc.id)}
+                                                                onChange={() => toggleAccountSelection(acc.id)}
+                                                            />
+                                                            {acc.name}
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="export-actions" style={{ display: 'flex', gap: '8px', marginTop: '16px', borderTop: '1px solid #eee', paddingTop: '12px' }}>
+                                                <button onClick={exportToCSV} className="btn btn-ghost btn-sm">CSV</button>
+                                                <button onClick={exportToExcel} className="btn btn-primary btn-sm">Excel (Detailed Data)</button>
+                                                <button onClick={exportToPDF} className="btn btn-ghost btn-sm">PDF (Full Report with Graphs)</button>
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
                             </div>
-                            <div className="modal-footer">
-                                <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    onClick={() => setShowAddModal(false)}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary"
-                                    disabled={saving}
-                                >
-                                    {saving ? 'Creating...' : 'Create Account'}
+
+                            <div className="table-container">
+                                <table className="users-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nama Bank</th>
+                                            <th>Today</th>
+                                            <th>This Week</th>
+                                            <th>This Month</th>
+                                            <th>This Year</th>
+                                            <th>Overall</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {accountStats.map(account => (
+                                            <tr key={account.id}>
+                                                <td><strong>{account.name}</strong></td>
+                                                <td>{formatNumber(account.today)}</td>
+                                                <td>{formatNumber(account.thisWeek)}</td>
+                                                <td>{formatNumber(account.thisMonth)}</td>
+                                                <td>{formatNumber(account.thisYear)}</td>
+                                                <td style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>{formatNumber(account.overall)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Charts Grid */}
+                            <div className="charts-grid" style={{ marginTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+                                {/* Daily Growth */}
+                                <div className="chart-card" style={{ background: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #eee', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                                    <h3 style={{ fontSize: '1rem', marginBottom: '15px', color: '#444' }}>Daily Nama Growth (7 Days)</h3>
+                                    <ResponsiveContainer width="100%" height={220}>
+                                        <AreaChart data={dailyData}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                            <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                                            <YAxis tick={{ fontSize: 11 }} />
+                                            <Tooltip />
+                                            <Area type="monotone" dataKey="count" stroke="#FF9933" fill="rgba(255,153,51,0.3)" />
+                                        </AreaChart>
+                                    </ResponsiveContainer>
+                                </div>
+
+                                {/* Weekly Momentum */}
+                                <div className="chart-card" style={{ background: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #eee', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                                    <h3 style={{ fontSize: '1rem', marginBottom: '15px', color: '#444' }}>Weekly Momentum</h3>
+                                    <ResponsiveContainer width="100%" height={220}>
+                                        <BarChart data={weeklyData}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                            <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                                            <YAxis tick={{ fontSize: 11 }} />
+                                            <Tooltip />
+                                            <Bar dataKey="count" fill="#8B0000" radius={[4, 4, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+
+                                {/* Account Contribution */}
+                                <div className="chart-card" style={{ background: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #eee', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                                    <h3 style={{ fontSize: '1rem', marginBottom: '15px', color: '#444' }}>Account Contribution</h3>
+                                    <ResponsiveContainer width="100%" height={220}>
+                                        <PieChart>
+                                            <Pie data={accountStats.filter(a => a.overall > 0)} dataKey="overall" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ percent }) => `${(percent * 100).toFixed(0)}%`}>
+                                                {accountStats.map((e, i) => (<Cell key={i} fill={COLORS[i % COLORS.length]} />))}
+                                            </Pie>
+                                            <Tooltip /><Legend />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                </div>
+
+                                {/* Top Growing Accounts */}
+                                <div className="chart-card chart-card-wide" style={{ background: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #eee', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                                    <h3 style={{ fontSize: '1rem', marginBottom: '15px', color: '#444' }}>Top Growing Accounts (This Week)</h3>
+                                    <ResponsiveContainer width="100%" height={220}>
+                                        <BarChart data={topGrowing}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                                            <YAxis tick={{ fontSize: 11 }} />
+                                            <Tooltip />
+                                            <Bar dataKey="growth" fill="#00BCD4" radius={[4, 4, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        </section>
+                    )}
+                </div>
+            </main >
+
+            {/* Add Account Modal */}
+            {
+                showAddModal && (
+                    <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
+                        <div className="modal" onClick={e => e.stopPropagation()}>
+                            <div className="modal-header">
+                                <h2>Add New Nama Bank Account</h2>
+                                <button className="modal-close" onClick={() => setShowAddModal(false)}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18" />
+                                        <line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
                                 </button>
                             </div>
-                        </form>
+                            <form onSubmit={handleAddAccount}>
+                                <div className="modal-body">
+                                    <div className="form-group">
+                                        <label className="form-label">Account Name <span className="required">*</span></label>
+                                        <input
+                                            type="text"
+                                            value={newAccountData.name}
+                                            onChange={(e) => setNewAccountData(prev => ({ ...prev, name: e.target.value }))}
+                                            className="form-input"
+                                            placeholder="e.g., Vizag Nama Bank"
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <div className="form-row" style={{ display: 'flex', flexDirection: 'row', gap: '16px' }}>
+                                        <div className="form-group" style={{ flex: 1 }}>
+                                            <label className="form-label">Start Date <span className="required">*</span></label>
+                                            <input
+                                                type="date"
+                                                value={newAccountData.start_date}
+                                                onChange={(e) => setNewAccountData(prev => ({ ...prev, start_date: e.target.value }))}
+                                                className="form-input"
+                                            />
+                                        </div>
+                                        <div className="form-group" style={{ flex: 1 }}>
+                                            <label className="form-label">End Date</label>
+                                            <input
+                                                type="date"
+                                                value={newAccountData.end_date}
+                                                onChange={(e) => setNewAccountData(prev => ({ ...prev, end_date: e.target.value }))}
+                                                className="form-input"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Target Goal</label>
+                                        <input
+                                            type="number"
+                                            value={newAccountData.target_goal}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (val.length <= 15) {
+                                                    setNewAccountData(prev => ({ ...prev, target_goal: val }));
+                                                }
+                                            }}
+                                            className="form-input"
+                                            placeholder="e.g., 1000000"
+                                            min="0"
+                                            max="999999999999999"
+                                        />
+                                        {newAccountData.target_goal && (
+                                            <span className="form-hint target-label">{numberToWords(newAccountData.target_goal)}</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="modal-footer">
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={() => setShowAddModal(false)}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="btn btn-primary"
+                                        disabled={saving}
+                                    >
+                                        {saving ? 'Creating...' : 'Create Account'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Edit Account Modal */}
-            {showEditModal && selectedAccount && (
-                <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Edit Account</h2>
-                            <button className="modal-close" onClick={() => setShowEditModal(false)}>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="18" y1="6" x2="6" y2="18" />
-                                    <line x1="6" y1="6" x2="18" y2="18" />
-                                </svg>
-                            </button>
-                        </div>
-                        <form onSubmit={handleEditAccount}>
-                            <div className="modal-body">
-                                <div className="form-group">
-                                    <label className="form-label">Account Name</label>
-                                    <input
-                                        type="text"
-                                        value={editData.name}
-                                        onChange={(e) => setEditData(prev => ({ ...prev, name: e.target.value }))}
-                                        className="form-input"
-                                        autoFocus
-                                    />
+            {
+                showEditModal && selectedAccount && (
+                    <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+                        <div className="modal" onClick={e => e.stopPropagation()}>
+                            <div className="modal-header">
+                                <h2>Edit Account</h2>
+                                <button className="modal-close" onClick={() => setShowEditModal(false)}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18" />
+                                        <line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <form onSubmit={handleEditAccount}>
+                                <div className="modal-body">
+                                    <div className="form-group">
+                                        <label className="form-label">Account Name</label>
+                                        <input
+                                            type="text"
+                                            value={editData.name}
+                                            onChange={(e) => setEditData(prev => ({ ...prev, name: e.target.value }))}
+                                            className="form-input"
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Description (Optional)</label>
+                                        <textarea
+                                            value={editData.description}
+                                            onChange={(e) => setEditData(prev => ({ ...prev, description: e.target.value }))}
+                                            className="form-input"
+                                            rows="3"
+                                            placeholder="Enter a description for this Nama Bank..."
+                                        />
+                                    </div>
                                 </div>
-                                <div className="form-group">
-                                    <label className="form-label">Description (Optional)</label>
-                                    <textarea
-                                        value={editData.description}
-                                        onChange={(e) => setEditData(prev => ({ ...prev, description: e.target.value }))}
-                                        className="form-input"
-                                        rows="3"
-                                        placeholder="Enter a description for this Nama Bank..."
-                                    />
+                                <div className="modal-footer">
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={() => setShowEditModal(false)}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="btn btn-primary"
+                                        disabled={saving}
+                                    >
+                                        {saving ? 'Saving...' : 'Save Changes'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* Bank Allocation Modal */}
+            {
+                showBankAllocationModal && selectedUserForAllocation && (
+                    <div className="modal-overlay" onClick={() => setShowBankAllocationModal(false)}>
+                        <div className="modal" onClick={e => e.stopPropagation()}>
+                            <div className="modal-header">
+                                <h2>Allocate Banks to {selectedUserForAllocation.name}</h2>
+                                <button className="modal-close" onClick={() => setShowBankAllocationModal(false)}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18" />
+                                        <line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div className="modal-body">
+                                <p className="modal-description">Select Nama Bank accounts to allocate:</p>
+                                <div className="checkbox-group">
+                                    {accounts.filter(acc => acc.is_active).map(account => (
+                                        <label key={account.id} className="checkbox-item">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedBanksForAllocation.includes(account.id)}
+                                                onChange={() => toggleBankSelection(account.id)}
+                                                disabled={userCurrentBanks.includes(account.id)}
+                                            />
+                                            <span>
+                                                {account.name}
+                                                {userCurrentBanks.includes(account.id) && (
+                                                    <small className="already-linked"> (Already linked)</small>
+                                                )}
+                                            </span>
+                                        </label>
+                                    ))}
                                 </div>
                             </div>
                             <div className="modal-footer">
-                                <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    onClick={() => setShowEditModal(false)}
-                                >
+                                <button className="btn btn-ghost" onClick={() => setShowBankAllocationModal(false)}>
                                     Cancel
                                 </button>
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary"
-                                    disabled={saving}
-                                >
-                                    {saving ? 'Saving...' : 'Save Changes'}
+                                <button className="btn btn-primary" onClick={handleSaveBankAllocation}>
+                                    Allocate Selected
                                 </button>
                             </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Bank Allocation Modal */}
-            {showBankAllocationModal && selectedUserForAllocation && (
-                <div className="modal-overlay" onClick={() => setShowBankAllocationModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Allocate Banks to {selectedUserForAllocation.name}</h2>
-                            <button className="modal-close" onClick={() => setShowBankAllocationModal(false)}>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="18" y1="6" x2="6" y2="18" />
-                                    <line x1="6" y1="6" x2="18" y2="18" />
-                                </svg>
-                            </button>
-                        </div>
-                        <div className="modal-body">
-                            <p className="modal-description">Select Nama Bank accounts to allocate:</p>
-                            <div className="checkbox-group">
-                                {accounts.filter(acc => acc.is_active).map(account => (
-                                    <label key={account.id} className="checkbox-item">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedBanksForAllocation.includes(account.id)}
-                                            onChange={() => toggleBankSelection(account.id)}
-                                            disabled={userCurrentBanks.includes(account.id)}
-                                        />
-                                        <span>
-                                            {account.name}
-                                            {userCurrentBanks.includes(account.id) && (
-                                                <small className="already-linked"> (Already linked)</small>
-                                            )}
-                                        </span>
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="modal-footer">
-                            <button className="btn btn-ghost" onClick={() => setShowBankAllocationModal(false)}>
-                                Cancel
-                            </button>
-                            <button className="btn btn-primary" onClick={handleSaveBankAllocation}>
-                                Allocate Selected
-                            </button>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Bulk Upload Modal */}
-            {showUploadModal && (
-                <div className="modal-overlay" onClick={() => setShowUploadModal(false)}>
-                    <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
-                        <ExcelUpload
-                            onUpload={handleBulkUpload}
-                            onClose={() => setShowUploadModal(false)}
-                            accounts={accounts}
-                        />
+            {
+                showUploadModal && (
+                    <div className="modal-overlay" onClick={() => setShowUploadModal(false)}>
+                        <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+                            <ExcelUpload
+                                onUpload={handleBulkUpload}
+                                onClose={() => setShowUploadModal(false)}
+                                accounts={accounts}
+                            />
+                        </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 

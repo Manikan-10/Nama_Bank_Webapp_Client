@@ -577,16 +577,32 @@ export const incrementBookView = async (bookId) => {
     return data;
 };
 
-export const deleteBook = async (bookId, fileUrl) => {
-    // 1. Delete from DB
-    const { error: dbError } = await supabase
-        .from('books')
-        .delete()
-        .eq('id', bookId);
+export const deleteBook = async (bookId, fileUrl, moderatorId = null) => {
+    // 1. Delete from DB (Securely if moderator)
+    if (moderatorId) {
+        const { error } = await supabase.rpc('delete_book_by_moderator', {
+            target_book_id: bookId,
+            moderator_id: moderatorId
+        });
+        if (error) {
+            console.error('RPC Error:', error);
+            throw new Error(error.message || 'Deletion failed via secure channel.');
+        }
+    } else {
+        // Standard delete (for admin or standard RLS)
+        const { error: dbError, count } = await supabase
+            .from('books')
+            .delete({ count: 'exact' })
+            .eq('id', bookId);
 
-    if (dbError) throw dbError;
+        if (dbError) throw dbError;
+        if (count === 0) {
+            throw new Error('Book could not be deleted. Permission denied or item not found.');
+        }
+    }
 
-    // 2. Delete from Storage (Optional but recommended)
+    // 2. Delete from Storage (Best effort)
+    // Note: This might still fail for moderators if Storage RLS is strict.
     if (fileUrl) {
         try {
             // Extract path from URL. URL: .../storage/v1/object/public/library/filename.pdf
@@ -598,4 +614,107 @@ export const deleteBook = async (bookId, fileUrl) => {
             console.error('Error deleting file from storage:', err);
         }
     }
+};
+
+export const deleteUser = async (id, moderatorId = null) => {
+    // If moderatorId is provided, use the secure RPC
+    if (moderatorId) {
+        const { error } = await supabase.rpc('delete_user_by_moderator', {
+            target_user_id: id,
+            moderator_id: moderatorId
+        });
+
+        if (error) {
+            console.error('RPC Error:', error);
+            throw new Error(error.message || 'Deletion failed via secure channel.');
+        }
+        return;
+    }
+
+    // Default flow (for Admin or valid RLS users)
+    // 1. Delete user entries
+    await supabase.from('nama_entries').delete().eq('user_id', id);
+
+    // 2. Delete user account links
+    await supabase.from('user_account_links').delete().eq('user_id', id);
+
+    // 3. Delete password resets
+    await supabase.from('password_resets').delete().eq('user_id', id);
+
+    // 4. Delete user
+    const { error, count } = await supabase
+        .from('users')
+        .delete({ count: 'exact' })
+        .eq('id', id);
+
+    if (error) throw error;
+    if (count === 0) {
+        throw new Error('User could not be deleted. Check permissions or if user exists.');
+    }
+};
+
+export const deletePrayer = async (id, moderatorId = null) => {
+    if (moderatorId) {
+        const { error } = await supabase.rpc('delete_prayer_by_moderator', {
+            target_prayer_id: id,
+            moderator_id: moderatorId
+        });
+        if (error) {
+            console.error('RPC Error:', error);
+            throw new Error(error.message || 'Deletion failed via secure channel.');
+        }
+        return;
+    }
+
+    const { error } = await supabase
+        .from('prayers')
+        .delete()
+        .eq('id', id);
+
+    if (error) throw error;
+};
+
+// ============================================
+// Account Deletion Requests Service
+// ============================================
+
+export const requestAccountDeletion = async (accountId, moderatorId, reason = null) => {
+    const { data, error } = await supabase
+        .from('account_deletion_requests')
+        .insert({
+            account_id: accountId,
+            requested_by: moderatorId,
+            reason,
+            status: 'pending'
+        })
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+};
+
+export const getPendingDeletionRequests = async () => {
+    const { data, error } = await supabase
+        .from('account_deletion_requests')
+        .select(`
+            *,
+            nama_accounts (id, name),
+            moderators (id, name)
+        `)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+};
+
+export const approveAccountDeletion = async (requestId) => {
+    const { error } = await supabase.rpc('approve_account_deletion', { request_id: requestId });
+    if (error) throw error;
+};
+
+export const rejectAccountDeletion = async (requestId) => {
+    const { error } = await supabase.rpc('reject_account_deletion', { request_id: requestId });
+    if (error) throw error;
 };

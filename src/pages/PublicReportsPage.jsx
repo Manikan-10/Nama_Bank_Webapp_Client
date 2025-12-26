@@ -240,47 +240,7 @@ const PublicReportsPage = () => {
     };
 
     const formatNumber = (num) => {
-        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
         return num?.toLocaleString() || '0';
-    };
-
-    const exportToCSV = () => {
-        const headers = ['Account Name', 'Today', 'This Week', 'This Month', 'This Year', 'Overall'];
-        const rows = accountStats.map(a => [a.name, a.today, a.thisWeek, a.thisMonth, a.thisYear, a.overall]);
-        const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `nama_bank_report_${new Date().toISOString().split('T')[0]}.csv`;
-        link.click();
-    };
-
-    const exportToExcel = async () => {
-        const XLSX = await import('xlsx');
-        const ws = XLSX.utils.json_to_sheet(accountStats.map(a => ({
-            'Account Name': a.name, 'Today': a.today, 'This Week': a.thisWeek,
-            'This Month': a.thisMonth, 'This Year': a.thisYear, 'Overall': a.overall
-        })));
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Nama Bank Report');
-        XLSX.writeFile(wb, `nama_bank_report_${new Date().toISOString().split('T')[0]}.xlsx`);
-    };
-
-    const exportToPDF = async () => {
-        const { jsPDF } = await import('jspdf');
-        const doc = new jsPDF();
-        doc.setFontSize(18);
-        doc.text('Nama Bank Report', 20, 20);
-        doc.setFontSize(10);
-        doc.text(`Generated on: ${new Date().toLocaleDateString('en-IN')}`, 20, 30);
-        let y = 45;
-        accountStats.forEach(account => {
-            doc.text(`${account.name}: ${formatNumber(account.overall)} total Namas`, 25, y);
-            y += 8;
-        });
-        doc.save(`nama_bank_report_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     if (loading) {
@@ -386,11 +346,6 @@ const PublicReportsPage = () => {
                     <section className="section account-stats">
                         <div className="section-header">
                             <h2>Account-wise Statistics</h2>
-                            <div className="export-buttons">
-                                <button onClick={exportToCSV} className="btn btn-secondary btn-sm">CSV</button>
-                                <button onClick={exportToExcel} className="btn btn-secondary btn-sm">Excel</button>
-                                <button onClick={exportToPDF} className="btn btn-secondary btn-sm">PDF</button>
-                            </div>
                         </div>
                         <div className="table-container">
                             <table className="table">

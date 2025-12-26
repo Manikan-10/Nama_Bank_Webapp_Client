@@ -34,19 +34,23 @@ const LandingPage = () => {
                     .select('*', { count: 'exact', head: true })
                     .eq('is_active', true);
 
+                // Get total books
+                const { count: bookCount } = await supabase
+                    .from('books')
+                    .select('*', { count: 'exact', head: true });
+
+                // Get total prayers
+                const { count: prayerCount } = await supabase
+                    .from('prayers')
+                    .select('*', { count: 'exact', head: true });
+
                 setLiveStats({
                     totalUsers: userCount || 0,
                     totalNamaCount: totalNama,
-                    activeAccounts: accountCount || 0
+                    activeAccounts: accountCount || 0,
+                    totalBooks: bookCount || 0,
+                    totalPrayers: prayerCount || 0
                 });
-
-                // Fetch recent books and prayers
-                const [books, prayers] = await Promise.all([
-                    getBooks(),
-                    getApprovedPrayers()
-                ]);
-                setRecentBooks(books.slice(0, 3));
-                setRecentPrayers(prayers.slice(0, 5));
 
             } catch (err) {
                 console.error('Error fetching landing data:', err);
@@ -59,6 +63,7 @@ const LandingPage = () => {
     }, []);
 
     const formatNumber = (num) => {
+        if (!num) return '0';
         if (num >= 10000000) return (num / 10000000).toFixed(2) + ' Cr';
         if (num >= 100000) return (num / 100000).toFixed(2) + ' Lacs';
         if (num >= 1000) return num.toLocaleString('en-IN');
@@ -175,114 +180,70 @@ const LandingPage = () => {
                             </span>
                         </Link>
 
-                        {/* Book Shelf Card */}
-                        <Link to="/books" className="landing-card hover-lift">
-                            <div className="card-icon-wrapper">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                                </svg>
+                        {/* Media Section Box */}
+                        <div className="landing-card media-selection-card" style={{ gridColumn: '1 / -1', background: 'var(--white)' }}>
+                            <div className="media-section-header" style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                                <h2 className="card-title" style={{ color: 'var(--maroon)' }}>MEDIA & DEVOTION</h2>
+                                <p style={{ color: 'var(--gray-500)' }}>Explore spiritual gallery and satsang audios</p>
                             </div>
-                            <h2 className="card-title">Book Shelf</h2>
-                            <p className="card-description">
-                                Read monthly devotional editions and spiritual texts
-                            </p>
-                            <span className="card-action">
-                                Browse Library
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="5" y1="12" x2="19" y2="12" />
-                                    <polyline points="12 5 19 12 12 19" />
-                                </svg>
-                            </span>
-                        </Link>
-
-                        {/* Prayer Box Card */}
-                        <Link to="/prayers" className="landing-card hover-lift">
-                            <div className="card-icon-wrapper">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                                    <circle cx="9" cy="7" r="4" />
-                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                                </svg>
+                            <div className="media-options-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                                <Link to="/gallery" className="media-option hover-lift" style={{ textDecoration: 'none', padding: '20px', borderRadius: '12px', background: 'var(--cream-light)', border: '1px solid var(--saffron-light)', textAlign: 'center' }}>
+                                    <div className="media-icon" style={{ color: 'var(--saffron-dark)', marginBottom: '10px', display: 'flex', justifyContent: 'center' }}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                            <circle cx="8.5" cy="8.5" r="1.5" />
+                                            <polyline points="21 15 16 10 5 21" />
+                                        </svg>
+                                    </div>
+                                    <h3 style={{ color: 'var(--maroon)', marginBottom: '5px' }}>Photo Gallery</h3>
+                                    <p style={{ fontSize: '0.9rem', color: 'var(--gray-600)' }}>Devotional gallery & wallpapers</p>
+                                </Link>
+                                <Link to="/audios" className="media-option hover-lift" style={{ textDecoration: 'none', padding: '20px', borderRadius: '12px', background: 'var(--cream-light)', border: '1px solid var(--saffron-light)', textAlign: 'center' }}>
+                                    <div className="media-icon" style={{ color: 'var(--saffron-dark)', marginBottom: '10px', display: 'flex', justifyContent: 'center' }}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M9 18V5l12-2v13" />
+                                            <circle cx="6" cy="18" r="3" />
+                                            <circle cx="18" cy="16" r="3" />
+                                        </svg>
+                                    </div>
+                                    <h3 style={{ color: 'var(--maroon)', marginBottom: '5px' }}>Satsang Audios</h3>
+                                    <p style={{ fontSize: '0.9rem', color: 'var(--gray-600)' }}>Bhajans, discourses & albms</p>
+                                </Link>
                             </div>
-                            <h2 className="card-title">Prayer Box</h2>
-                            <p className="card-description">
-                                Submit your prayers and support others in faith
-                            </p>
-                            <span className="card-action">
-                                Submit Your Prayers
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="5" y1="12" x2="19" y2="12" />
-                                    <polyline points="12 5 19 12 12 19" />
-                                </svg>
-                            </span>
-                        </Link>
+                        </div>
 
                         {/* Live Summary Box */}
-                        <div className="landing-card live-summary-card">
-                            <div className="card-icon-wrapper">
+                        <div className="landing-card live-summary-card" style={{ gridColumn: '1 / -1' }}>
+                            <div className="card-icon-wrapper" style={{ margin: '0 auto 1.5rem', background: 'var(--saffron-light)' }}>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
                                 </svg>
                             </div>
                             <h2 className="card-title">LIVE SUMMARY</h2>
-                            <p className="summary-header">🌸 Nama Bank at a Glance</p>
-                            <ul className="summary-stats">
-                                <li>• {formatNumber(liveStats.totalUsers)} devotees already participating</li>
-                                <li>• {formatNumber(liveStats.totalNamaCount)} Nama offered so far</li>
-                                <li>• {liveStats.activeAccounts} active Nama Sankalpas</li>
-                            </ul>
-                        </div>
-                    </div>
+                            <p className="summary-header">Nama Bank Highlights</p>
 
-                    {/* New on Book Shelf Section */}
-                    <section className="landing-content-section section-books">
-                        <div className="section-header">
-                            <h2>New on Book Shelf</h2>
-                            <Link to="/books" className="view-all">View All Books →</Link>
-                        </div>
-                        <div className="landing-books-grid">
-                            {recentBooks.map(book => (
-                                <Link to={`/books/${book.id}`} key={book.id} className="landing-book-item">
-                                    <div className="landing-book-cover">
-                                        <div className="book-spine"></div>
-                                        <div className="book-info">
-                                            <h3>{book.title}</h3>
-                                            <p>{book.month} {book.year}</p>
-                                        </div>
-                                    </div>
-                                    <div className="landing-book-details">
-                                        <h4>{book.title}</h4>
-                                        <span>{book.language} • {book.edition_type}</span>
-                                    </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem' }}>
+                                <Link to="/books" style={{ textDecoration: 'none', color: 'var(--gray-700)', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--cream-light)', padding: '0.5rem 1rem', borderRadius: '8px' }}>
+                                    <span style={{ fontWeight: 'bold', color: 'var(--maroon)' }}>{liveStats.totalBooks || 0}</span> Books added in Shelf.
+                                    <span style={{ color: 'var(--primary-color)', fontWeight: '600' }}>Click here to go to Book Shelf →</span>
                                 </Link>
-                            ))}
-                        </div>
-                    </section>
 
-                    {/* Recent Prayers Section */}
-                    <section className="landing-content-section section-prayers">
-                        <div className="section-header">
-                            <h2>Prayer Box</h2>
-                            <Link to="/prayers" className="view-all">Visit Prayer Wall →</Link>
-                        </div>
-                        <div className="landing-prayers-list">
-                            {recentPrayers.map(prayer => (
-                                <div key={prayer.id} className="landing-prayer-item">
-                                    <p className="prayer-text">{prayer.prayer_text}</p>
-                                    <div className="prayer-meta">
-                                        <span className="prayer-author">- {prayer.privacy === 'anonymous' ? 'Anonymous' : prayer.name}</span>
-                                        <span className="prayer-count">🌸 {prayer.prayer_count || 0} prayers offered</span>
-                                    </div>
-                                </div>
-                            ))}
-                            <div className="submit-prompt">
-                                <p>Do you have a prayer request?</p>
-                                <Link to="/prayers" className="btn btn-sm btn-outline">Submit Prayer</Link>
+                                <Link to="/prayers" style={{ textDecoration: 'none', color: 'var(--gray-700)', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--cream-light)', padding: '0.5rem 1rem', borderRadius: '8px' }}>
+                                    <span style={{ fontWeight: 'bold', color: 'var(--maroon)' }}>{liveStats.totalPrayers || 0}</span> Prayers added.
+                                    <span style={{ color: 'var(--primary-color)', fontWeight: '600' }}>Click here to see the prayers →</span>
+                                </Link>
+                            </div>
+
+                            <div style={{ borderTop: '1px dashed var(--gray-300)', paddingTop: '1rem', width: '100%' }}>
+                                <p style={{ fontWeight: '600', marginBottom: '10px', color: 'var(--gray-600)' }}>Current Stats</p>
+                                <ul className="summary-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
+                                    <li style={{ border: 'none', textAlign: 'center' }}>• {formatNumber(liveStats.totalUsers)} Devotees</li>
+                                    <li style={{ border: 'none', textAlign: 'center' }}>• {formatNumber(liveStats.totalNamaCount)} Nama Offered</li>
+                                    <li style={{ border: 'none', textAlign: 'center' }}>• {liveStats.activeAccounts} Active Sankalpas</li>
+                                </ul>
                             </div>
                         </div>
-                    </section>
+                    </div>
 
                     {/* Moderator & Admin Links */}
                     <div className="admin-section">
