@@ -13,6 +13,8 @@ const InvestNamaPage = () => {
     const [counts, setCounts] = useState({});
     const [loading, setLoading] = useState(false);
     const [todayStats, setTodayStats] = useState({ today: 0 });
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
 
     useEffect(() => {
         if (!user) {
@@ -72,7 +74,7 @@ const InvestNamaPage = () => {
         setLoading(true);
 
         try {
-            await submitMultipleNamaEntries(user.id, entries);
+            await submitMultipleNamaEntries(user.id, entries, 'manual', startDate, endDate);
             success(`${getTotalCount()} Namas offered successfully! Hari Om`);
 
             // Reset counts
@@ -81,6 +83,8 @@ const InvestNamaPage = () => {
                 resetCounts[acc.id] = 0;
             });
             setCounts(resetCounts);
+            setStartDate('');
+            setEndDate('');
             loadTodayStats();
         } catch (err) {
             error('Failed to submit. Please try again.');
@@ -167,6 +171,34 @@ const InvestNamaPage = () => {
                         </div>
                     ) : (
                         <form onSubmit={handleSubmit} className="invest-form">
+                            {/* Date Range Selection */}
+                            <div className="date-selection-section">
+                                <h3 className="section-title">Offering Period (Optional)</h3>
+                                <div className="date-inputs">
+                                    <div className="form-group">
+                                        <label htmlFor="startDate">Start Date</label>
+                                        <input
+                                            type="date"
+                                            id="startDate"
+                                            value={startDate}
+                                            onChange={(e) => setStartDate(e.target.value)}
+                                            className="form-input"
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label htmlFor="endDate">End Date</label>
+                                        <input
+                                            type="date"
+                                            id="endDate"
+                                            value={endDate}
+                                            onChange={(e) => setEndDate(e.target.value)}
+                                            className="form-input"
+                                        />
+                                    </div>
+                                </div>
+                                <p className="date-hint">Select dates if you are offering for a specific period.</p>
+                            </div>
+
                             <div className="accounts-form">
                                 {linkedAccounts.map(account => (
                                     <div key={account.id} className="account-entry">

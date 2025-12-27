@@ -381,6 +381,25 @@
     color: var(--saffron-dark);
 }
 
+/* Date Period Badges */
+.date-range-badge {
+    display: inline-block;
+    background: var(--cream-light);
+    color: var(--maroon);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.single-day-badge {
+    display: inline-block;
+    color: var(--gray-400);
+    font-size: var(--text-xs);
+    font-style: italic;
+}
+
 /* Charts Section */
 .charts-grid {
     display: grid;

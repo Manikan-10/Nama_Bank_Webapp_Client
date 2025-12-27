@@ -180,6 +180,24 @@ const LandingPage = () => {
                             </span>
                         </Link>
 
+                        {/* Live Summary Box - Small */}
+                        <div className="landing-card live-summary-card hover-lift" style={{ textAlign: 'left' }}>
+                            <div className="card-icon-wrapper" style={{ marginBottom: '1rem', background: 'var(--saffron-light)', width: '48px', height: '48px' }}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                                </svg>
+                            </div>
+                            <h2 className="card-title" style={{ textAlign: 'left', marginBottom: '0.25rem', fontSize: '1rem' }}>LIVE SUMMARY</h2>
+                            <p className="summary-header" style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                                <span style={{ fontSize: '0.9rem' }}>🌸</span> Nama Bank at a Glance
+                            </p>
+                            <ul style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', listStyle: 'none', padding: 0, margin: 0, fontSize: '0.875rem' }}>
+                                <li>• {formatNumber(liveStats.totalUsers)} devotees participating</li>
+                                <li>• {formatNumber(liveStats.totalNamaCount)} Nama offered</li>
+                                <li>• {liveStats.activeAccounts} active Sankalpas</li>
+                            </ul>
+                        </div>
+
                         {/* Media Section Box */}
                         <div className="landing-card media-selection-card" style={{ gridColumn: '1 / -1', background: 'var(--white)' }}>
                             <div className="media-section-header" style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
@@ -212,35 +230,20 @@ const LandingPage = () => {
                             </div>
                         </div>
 
-                        {/* Live Summary Box */}
-                        <div className="landing-card live-summary-card" style={{ gridColumn: '1 / -1' }}>
-                            <div className="card-icon-wrapper" style={{ margin: '0 auto 1.5rem', background: 'var(--saffron-light)' }}>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                                </svg>
-                            </div>
-                            <h2 className="card-title">LIVE SUMMARY</h2>
-                            <p className="summary-header">Nama Bank Highlights</p>
 
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem' }}>
-                                <Link to="/books" style={{ textDecoration: 'none', color: 'var(--gray-700)', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--cream-light)', padding: '0.5rem 1rem', borderRadius: '8px' }}>
-                                    <span style={{ fontWeight: 'bold', color: 'var(--maroon)' }}>{liveStats.totalBooks || 0}</span> Books added in Shelf.
+                        {/* Separate Box: Nama Bank Live Stats for Books & Prayers */}
+                        <div className="landing-card live-stats-box" style={{ gridColumn: '1 / -1', background: 'var(--white)', border: '2px dashed var(--saffron-light)', textAlign: 'center', padding: '2rem' }}>
+                            <h2 className="card-title" style={{ color: 'var(--maroon)', marginBottom: '1.5rem', fontSize: '1rem', letterSpacing: '0.05em' }}>NAMA BANK LIVE STATS</h2>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
+                                <Link to="/books" style={{ textDecoration: 'none', color: 'var(--gray-700)', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--cream-light)', padding: '0.75rem 1.5rem', borderRadius: '8px', transition: 'transform 0.2s' }} className="hover-lift">
+                                    <span style={{ fontWeight: 'bold', color: 'var(--maroon)', fontSize: '1.1rem' }}>{liveStats.totalBooks || 0}</span> Books added in Shelf.
                                     <span style={{ color: 'var(--primary-color)', fontWeight: '600' }}>Click here to go to Book Shelf →</span>
                                 </Link>
 
-                                <Link to="/prayers" style={{ textDecoration: 'none', color: 'var(--gray-700)', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--cream-light)', padding: '0.5rem 1rem', borderRadius: '8px' }}>
-                                    <span style={{ fontWeight: 'bold', color: 'var(--maroon)' }}>{liveStats.totalPrayers || 0}</span> Prayers added.
+                                <Link to="/prayers" style={{ textDecoration: 'none', color: 'var(--gray-700)', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--cream-light)', padding: '0.75rem 1.5rem', borderRadius: '8px', transition: 'transform 0.2s' }} className="hover-lift">
+                                    <span style={{ fontWeight: 'bold', color: 'var(--maroon)', fontSize: '1.1rem' }}>{liveStats.totalPrayers || 0}</span> Prayers added.
                                     <span style={{ color: 'var(--primary-color)', fontWeight: '600' }}>Click here to see the prayers →</span>
                                 </Link>
-                            </div>
-
-                            <div style={{ borderTop: '1px dashed var(--gray-300)', paddingTop: '1rem', width: '100%' }}>
-                                <p style={{ fontWeight: '600', marginBottom: '10px', color: 'var(--gray-600)' }}>Current Stats</p>
-                                <ul className="summary-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
-                                    <li style={{ border: 'none', textAlign: 'center' }}>• {formatNumber(liveStats.totalUsers)} Devotees</li>
-                                    <li style={{ border: 'none', textAlign: 'center' }}>• {formatNumber(liveStats.totalNamaCount)} Nama Offered</li>
-                                    <li style={{ border: 'none', textAlign: 'center' }}>• {liveStats.activeAccounts} Active Sankalpas</li>
-                                </ul>
                             </div>
                         </div>
                     </div>

@@ -169,6 +169,35 @@
     padding: var(--space-6);
 }
 
+/* Date Selection Section */
+.date-selection-section {
+    margin-bottom: var(--space-6);
+    padding-bottom: var(--space-6);
+    border-bottom: 1px solid var(--gray-100);
+}
+
+.section-title {
+    font-size: var(--text-sm);
+    color: var(--gray-700);
+    font-weight: 600;
+    margin-bottom: var(--space-4);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.date-inputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+    margin-bottom: var(--space-2);
+}
+
+.date-hint {
+    font-size: var(--text-xs);
+    color: var(--gray-500);
+    margin-top: var(--space-2);
+}
+
 .account-entry {
     padding: var(--space-5);
     border-bottom: 1px solid var(--gray-100);

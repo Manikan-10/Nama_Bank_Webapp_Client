@@ -123,9 +123,10 @@ const ReportsPage = () => {
                                         <table className="table">
                                             <thead>
                                                 <tr>
-                                                    <th>Date</th>
+                                                    <th>Entry Date</th>
                                                     <th>Nama Bank</th>
                                                     <th>Count</th>
+                                                    <th>Period (Start - End)</th>
                                                     <th>Type</th>
                                                 </tr>
                                             </thead>
@@ -135,6 +136,15 @@ const ReportsPage = () => {
                                                         <td>{formatDate(entry.entry_date)}</td>
                                                         <td>{entry.nama_accounts?.name || '-'}</td>
                                                         <td className="count-cell">{formatNumber(entry.count)}</td>
+                                                        <td>
+                                                            {entry.start_date || entry.end_date ? (
+                                                                <span className="date-range">
+                                                                    {entry.start_date ? formatDate(entry.start_date) : '...'} - {entry.end_date ? formatDate(entry.end_date) : '...'}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="date-single">Single Day</span>
+                                                            )}
+                                                        </td>
                                                         <td>
                                                             <span className={`badge badge-${entry.source_type === 'audio' ? 'info' : 'success'}`}>
                                                                 {entry.source_type}

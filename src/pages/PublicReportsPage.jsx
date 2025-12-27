@@ -22,6 +22,7 @@ const PublicReportsPage = () => {
     const [newDevotees, setNewDevotees] = useState([]);
     const [topGrowing, setTopGrowing] = useState([]);
     const [totalStats, setTotalStats] = useState({ users: 0, entries: 0, total: 0 });
+    const [recentEntries, setRecentEntries] = useState([]);
 
     useEffect(() => {
         loadAllData();
@@ -39,7 +40,8 @@ const PublicReportsPage = () => {
                 loadCityStats(),
                 loadNewDevotees(),
                 loadTopGrowing(),
-                loadTotalStats()
+                loadTotalStats(),
+                loadRecentEntries()
             ]);
         } catch (error) {
             console.error('Error loading data:', error);
@@ -239,6 +241,29 @@ const PublicReportsPage = () => {
         setTotalStats({ users: userCount || 0, entries: (entries || []).length, total });
     };
 
+    const loadRecentEntries = async () => {
+        const { data } = await supabase
+            .from('nama_entries')
+            .select(`
+                id,
+                count,
+                entry_date,
+                start_date,
+                end_date,
+                source_type,
+                users (name),
+                nama_accounts (name)
+            `)
+            .order('created_at', { ascending: false })
+            .limit(15);
+        setRecentEntries(data || []);
+    };
+
+    const formatDate = (dateStr) => {
+        if (!dateStr) return null;
+        return new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
     const formatNumber = (num) => {
         return num?.toLocaleString() || '0';
     };
@@ -364,6 +389,47 @@ const PublicReportsPage = () => {
                                             <td>{formatNumber(account.thisMonth)}</td>
                                             <td>{formatNumber(account.thisYear)}</td>
                                             <td className="highlight-cell">{formatNumber(account.overall)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    {/* Recent Nama Offerings with Period */}
+                    <section className="section recent-offerings">
+                        <h2>Recent Nama Offerings</h2>
+                        <div className="table-container">
+                            <table className="table">
+                                <thead>
+                                    <tr>
+                                        <th>Devotee</th>
+                                        <th>Nama Bank</th>
+                                        <th>Count</th>
+                                        <th>Period (Start - End)</th>
+                                        <th>Type</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {recentEntries.map(entry => (
+                                        <tr key={entry.id}>
+                                            <td>{entry.users?.name || '-'}</td>
+                                            <td><strong>{entry.nama_accounts?.name || '-'}</strong></td>
+                                            <td className="highlight-cell">{formatNumber(entry.count)}</td>
+                                            <td>
+                                                {entry.start_date || entry.end_date ? (
+                                                    <span className="date-range-badge">
+                                                        {formatDate(entry.start_date) || '...'} - {formatDate(entry.end_date) || '...'}
+                                                    </span>
+                                                ) : (
+                                                    <span className="single-day-badge">Single Day</span>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <span className={`badge badge-${entry.source_type === 'audio' ? 'info' : 'success'}`}>
+                                                    {entry.source_type}
+                                                </span>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>

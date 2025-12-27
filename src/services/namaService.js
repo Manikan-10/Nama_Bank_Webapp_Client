@@ -72,18 +72,23 @@ export const deleteNamaAccount = async (id) => {
 // Nama Entries Service
 // ============================================
 
-export const submitNamaEntry = async (userId, accountId, count, sourceType = 'manual') => {
+export const submitNamaEntry = async (userId, accountId, count, sourceType = 'manual', startDate = null, endDate = null) => {
     const today = new Date().toISOString().split('T')[0];
+
+    const entryData = {
+        user_id: userId,
+        account_id: accountId,
+        count,
+        source_type: sourceType,
+        entry_date: today
+    };
+
+    if (startDate) entryData.start_date = startDate;
+    if (endDate) entryData.end_date = endDate;
 
     const { data, error } = await supabase
         .from('nama_entries')
-        .insert({
-            user_id: userId,
-            account_id: accountId,
-            count,
-            source_type: sourceType,
-            entry_date: today
-        })
+        .insert(entryData)
         .select()
         .single();
 
@@ -91,16 +96,21 @@ export const submitNamaEntry = async (userId, accountId, count, sourceType = 'ma
     return data;
 };
 
-export const submitMultipleNamaEntries = async (userId, entries, sourceType = 'manual') => {
+export const submitMultipleNamaEntries = async (userId, entries, sourceType = 'manual', startDate = null, endDate = null) => {
     const today = new Date().toISOString().split('T')[0];
 
-    const insertData = entries.map(entry => ({
-        user_id: userId,
-        account_id: entry.accountId,
-        count: entry.count,
-        source_type: sourceType,
-        entry_date: today
-    }));
+    const insertData = entries.map(entry => {
+        const entryObj = {
+            user_id: userId,
+            account_id: entry.accountId,
+            count: entry.count,
+            source_type: sourceType,
+            entry_date: today
+        };
+        if (startDate) entryObj.start_date = startDate;
+        if (endDate) entryObj.end_date = endDate;
+        return entryObj;
+    });
 
     const { data, error } = await supabase
         .from('nama_entries')
@@ -121,6 +131,7 @@ export const getUserRecentEntries = async (userId, limit = 10) => {
       )
     `)
         .eq('user_id', userId)
+        .order('entry_date', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(limit);
 
