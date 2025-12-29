@@ -15,6 +15,8 @@ const InvestNamaPage = () => {
     const [todayStats, setTodayStats] = useState({ today: 0 });
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+    const [submissionSuccess, setSubmissionSuccess] = useState(null);
+    const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
     useEffect(() => {
         if (!user) {
@@ -71,11 +73,27 @@ const InvestNamaPage = () => {
             return;
         }
 
+        // Show confirmation dialog
+        setShowConfirmDialog(true);
+    };
+
+    const confirmSubmission = async () => {
+        const entries = Object.entries(counts)
+            .filter(([_, count]) => count > 0)
+            .map(([accountId, count]) => ({
+                accountId,
+                count,
+                sourceType: 'manual'
+            }));
+
+        setShowConfirmDialog(false);
         setLoading(true);
 
         try {
             await submitMultipleNamaEntries(user.id, entries, 'manual', startDate, endDate);
-            success(`${getTotalCount()} Namas offered successfully! Hari Om`);
+            const total = getTotalCount();
+            success(`${total} Namas offered successfully! Hari Om`);
+            setSubmissionSuccess(`Successfully offered ${total} Namas! Hari Om.`);
 
             // Reset counts
             const resetCounts = {};
@@ -86,6 +104,9 @@ const InvestNamaPage = () => {
             setStartDate('');
             setEndDate('');
             loadTodayStats();
+
+            // Clear success message after 5 seconds
+            setTimeout(() => setSubmissionSuccess(null), 5000);
         } catch (err) {
             error('Failed to submit. Please try again.');
         } finally {
@@ -266,12 +287,140 @@ const InvestNamaPage = () => {
                                     'Offer Namas'
                                 )}
                             </button>
+
+                            {submissionSuccess && (
+                                <div className="submission-success-message" style={{
+                                    marginTop: '1rem',
+                                    padding: '1rem',
+                                    backgroundColor: 'var(--success-light, #d4edda)',
+                                    color: 'var(--success-dark, #155724)',
+                                    borderRadius: '8px',
+                                    textAlign: 'center',
+                                    fontWeight: 'bold',
+                                    border: '1px solid var(--success-color, #28a745)'
+                                }}>
+                                    ✓ {submissionSuccess}
+                                </div>
+                            )}
                         </form>
                     )}
                 </div>
             </main>
+
+            {/* Confirmation Dialog */}
+            {showConfirmDialog && (
+                <div className="confirm-modal-overlay" style={{
+                    position: 'fixed',
+                    inset: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000
+                }}>
+                    <div className="confirm-modal" style={{
+                        background: 'white',
+                        borderRadius: '16px',
+                        padding: '24px',
+                        maxWidth: '400px',
+                        width: '90%',
+                        boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)',
+                        animation: 'slideUp 0.3s ease'
+                    }}>
+                        <h3 style={{
+                            fontSize: '1.25rem',
+                            color: 'var(--maroon, #8B0000)',
+                            marginBottom: '16px',
+                            textAlign: 'center'
+                        }}>
+                            🙏 Confirm Your Offering
+                        </h3>
+
+                        <div style={{
+                            background: 'var(--cream-light, #fdf8f3)',
+                            borderRadius: '8px',
+                            padding: '16px',
+                            marginBottom: '16px'
+                        }}>
+                            <p style={{ marginBottom: '12px', fontWeight: '600', color: 'var(--gray-700, #374151)' }}>
+                                You are offering:
+                            </p>
+                            {Object.entries(counts)
+                                .filter(([_, count]) => count > 0)
+                                .map(([accountId, count]) => {
+                                    const account = linkedAccounts.find(a => a.id === accountId);
+                                    return (
+                                        <div key={accountId} style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            marginBottom: '8px',
+                                            padding: '8px',
+                                            background: 'white',
+                                            borderRadius: '6px'
+                                        }}>
+                                            <span>{account?.name || 'Account'}</span>
+                                            <strong style={{ color: 'var(--saffron, #FF9933)' }}>{count.toLocaleString()} Namas</strong>
+                                        </div>
+                                    );
+                                })}
+                            <div style={{
+                                borderTop: '2px solid var(--saffron, #FF9933)',
+                                marginTop: '8px',
+                                paddingTop: '8px',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                fontWeight: 'bold'
+                            }}>
+                                <span>Total</span>
+                                <span style={{ color: 'var(--maroon, #8B0000)' }}>{getTotalCount().toLocaleString()} Namas</span>
+                            </div>
+                            {(startDate || endDate) && (
+                                <div style={{ marginTop: '12px', fontSize: '0.85rem', color: 'var(--gray-500, #6b7280)' }}>
+                                    {startDate && <span>From: {startDate}</span>}
+                                    {startDate && endDate && ' • '}
+                                    {endDate && <span>To: {endDate}</span>}
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <button
+                                onClick={() => setShowConfirmDialog(false)}
+                                style={{
+                                    flex: 1,
+                                    padding: '12px',
+                                    border: '1px solid #ddd',
+                                    background: 'white',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    fontWeight: '500'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmSubmission}
+                                style={{
+                                    flex: 1,
+                                    padding: '12px',
+                                    border: 'none',
+                                    background: 'var(--saffron, #FF9933)',
+                                    color: 'white',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    fontWeight: '600'
+                                }}
+                            >
+                                Confirm Offering
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
 export default InvestNamaPage;
+
+

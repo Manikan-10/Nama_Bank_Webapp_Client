@@ -15,10 +15,10 @@ import {
     bulkCreateUsers,
     getBooks,
     deleteBook,
-    deleteUser,
     deletePrayer,
     getAllPrayers,
     requestAccountDeletion,
+    requestUserDeletion,
     getAccountStats
 } from '../services/namaService';
 import { supabase } from '../supabaseClient';
@@ -28,6 +28,7 @@ import {
     LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area,
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
+import * as XLSX from 'xlsx';
 import './ModeratorDashboardPage.css';
 
 const COLORS = ['#FF9933', '#8B0000', '#4CAF50', '#2196F3', '#9C27B0', '#FF5722', '#00BCD4', '#E91E63'];
@@ -282,15 +283,19 @@ const ModeratorDashboardPage = () => {
     };
 
     const handleDeleteUser = async (user) => {
-        if (!confirm(`Are you sure you want to delete user ${user.name}? This action cannot be undone.`)) return;
+        const reason = prompt(`Please provide a reason for deleting user ${user.name}:`);
+        if (!reason) {
+            error('A reason is required to request user deletion.');
+            return;
+        }
 
         try {
-            await deleteUser(user.id, moderator?.id);
-            success('User deleted successfully');
+            await requestUserDeletion(user.id, moderator?.id, reason);
+            success('User deletion request submitted. Awaiting admin approval.');
             loadData();
         } catch (err) {
-            console.error('Delete user error:', err);
-            error(err.message || 'Failed to delete user');
+            console.error('Delete request error:', err);
+            error(err.message || 'Failed to submit deletion request');
         }
     };
 
@@ -311,30 +316,34 @@ const ModeratorDashboardPage = () => {
 
     const handleBulkDelete = async () => {
         if (selectedUserIds.length === 0) return;
-        if (!confirm(`Are you sure you want to delete ${selectedUserIds.length} users? This action cannot be undone.`)) return;
+        const reason = prompt(`Please provide a reason for deleting ${selectedUserIds.length} users:`);
+        if (!reason) {
+            error('A reason is required to request user deletion.');
+            return;
+        }
 
         try {
             let successCount = 0;
             for (const userId of selectedUserIds) {
                 try {
-                    await deleteUser(userId, moderator?.id);
+                    await requestUserDeletion(userId, moderator?.id, reason);
                     successCount++;
                 } catch (err) {
-                    console.error(`Failed to delete user ${userId}`, err);
+                    console.error(`Failed to request deletion for user ${userId}`, err);
                 }
             }
 
             if (successCount === selectedUserIds.length) {
-                success(`Successfully deleted ${successCount} users.`);
+                success(`Submitted ${successCount} deletion requests. Awaiting admin approval.`);
             } else {
-                success(`Deleted ${successCount} out of ${selectedUserIds.length} users. Some failed.`);
+                success(`Submitted ${successCount} out of ${selectedUserIds.length} requests. Some failed.`);
             }
 
             setSelectedUserIds([]);
             loadData();
         } catch (err) {
-            console.error('Bulk delete error:', err);
-            error('An error occurred during bulk deletion.');
+            console.error('Bulk delete request error:', err);
+            error('An error occurred during bulk deletion request.');
         }
     };
 
@@ -470,12 +479,39 @@ const ModeratorDashboardPage = () => {
         const wb = XLSX.utils.book_new();
         const statsToExport = getFilteredStats();
 
+        // 1. Summary Sheet
         const wsSummary = XLSX.utils.json_to_sheet(statsToExport.map(a => ({
             'Account Name': a.name, 'Today': a.today, 'This Week': a.thisWeek,
             'This Month': a.thisMonth, 'This Year': a.thisYear, 'Overall': a.overall
         })));
         XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
 
+        // 2. Dashboard Graphs Data
+        // Daily Growth
+        if (dailyData && dailyData.length > 0) {
+            const wsDaily = XLSX.utils.json_to_sheet(dailyData.map(d => ({ 'Date': d.date, 'Count': d.count })));
+            XLSX.utils.book_append_sheet(wb, wsDaily, 'Graph - Daily Growth');
+        }
+
+        // Weekly Momentum
+        if (weeklyData && weeklyData.length > 0) {
+            const wsWeekly = XLSX.utils.json_to_sheet(weeklyData.map(d => ({ 'Week': d.week, 'Count': d.count })));
+            XLSX.utils.book_append_sheet(wb, wsWeekly, 'Graph - Weekly Momentum');
+        }
+
+        // City Stats
+        if (cityStats && cityStats.length > 0) {
+            const wsCity = XLSX.utils.json_to_sheet(cityStats.map(c => ({ 'City': c.city, 'Count': c.count })));
+            XLSX.utils.book_append_sheet(wb, wsCity, 'Graph - Top Cities');
+        }
+
+        // Source Ratio
+        if (sourceRatio && sourceRatio.length > 0) {
+            const wsSource = XLSX.utils.json_to_sheet(sourceRatio.map(s => ({ 'Source': s.name, 'Count': s.value })));
+            XLSX.utils.book_append_sheet(wb, wsSource, 'Graph - Source Ratio');
+        }
+
+        // 3. Detailed Account Data
         for (const account of statsToExport) {
             try {
                 const { data } = await supabase
@@ -510,19 +546,20 @@ const ModeratorDashboardPage = () => {
             }
         }
 
-        // Add a Guide sheet
+        // 4. Guide Sheet
         const guideData = [
             ['How to use this report'],
             [''],
             ['1. Summary Sheet', 'Provides a high-level overview of total Namas per account.'],
-            ['2. Account Sheets', 'Contains daily time-series data for individual accounts.'],
+            ['2. Graph Sheets', 'Contains aggregate data used for the dashboard graphs (Daily, Weekly, Cities, Source).'],
+            ['3. Account Sheets', 'Contains daily time-series data for individual accounts.'],
             [''],
             ['Creating Graphs in Excel:'],
-            ['1. Go to any account sheet (e.g., "UK Nama Bank").'],
-            ['2. Select all data in columns A and B.'],
+            ['1. Go to any Graph sheet or Account sheet.'],
+            ['2. Select the data columns.'],
             ['3. Go to the "Insert" tab in the Excel ribbon.'],
-            ['4. Choose "Recommended Charts" or select a "Line Chart".'],
-            ['5. Your graph will appear automatically based on the date and count!']
+            ['4. Choose "Recommended Charts" or select a "Line/Bar Chart".'],
+            ['5. Your graph will appear automatically!']
         ];
         const wsGuide = XLSX.utils.aoa_to_sheet(guideData);
         XLSX.utils.book_append_sheet(wb, wsGuide, 'Report Guide');
@@ -1159,16 +1196,18 @@ const ModeratorDashboardPage = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {accountStats.map(account => (
-                                            <tr key={account.id}>
-                                                <td><strong>{account.name}</strong></td>
-                                                <td>{formatNumber(account.today)}</td>
-                                                <td>{formatNumber(account.thisWeek)}</td>
-                                                <td>{formatNumber(account.thisMonth)}</td>
-                                                <td>{formatNumber(account.thisYear)}</td>
-                                                <td style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>{formatNumber(account.overall)}</td>
-                                            </tr>
-                                        ))}
+                                        {accountStats
+                                            .filter(acc => selectedExportAccounts.length === 0 || selectedExportAccounts.includes(acc.id))
+                                            .map(account => (
+                                                <tr key={account.id}>
+                                                    <td><strong>{account.name}</strong></td>
+                                                    <td>{formatNumber(account.today)}</td>
+                                                    <td>{formatNumber(account.thisWeek)}</td>
+                                                    <td>{formatNumber(account.thisMonth)}</td>
+                                                    <td>{formatNumber(account.thisYear)}</td>
+                                                    <td style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>{formatNumber(account.overall)}</td>
+                                                </tr>
+                                            ))}
                                     </tbody>
                                 </table>
                             </div>

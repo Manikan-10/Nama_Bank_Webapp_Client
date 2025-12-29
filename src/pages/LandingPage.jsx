@@ -25,14 +25,13 @@ const LandingPage = () => {
                 // Get total nama count
                 const { data: namaData } = await supabase
                     .from('nama_entries')
-                    .select('count');
+                    .select('count, account_id');
+                
                 const totalNama = namaData?.reduce((sum, entry) => sum + (entry.count || 0), 0) || 0;
 
-                // Get active accounts count
-                const { count: accountCount } = await supabase
-                    .from('nama_accounts')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('is_active', true);
+                // Get active accounts count (accounts with at least one entry)
+                const activeAccountIds = new Set(namaData?.map(entry => entry.account_id).filter(Boolean));
+                const accountCount = activeAccountIds.size;
 
                 // Get total books
                 const { count: bookCount } = await supabase
@@ -230,22 +229,6 @@ const LandingPage = () => {
                             </div>
                         </div>
 
-
-                        {/* Separate Box: Nama Bank Live Stats for Books & Prayers */}
-                        <div className="landing-card live-stats-box" style={{ gridColumn: '1 / -1', background: 'var(--white)', border: '2px dashed var(--saffron-light)', textAlign: 'center', padding: '2rem' }}>
-                            <h2 className="card-title" style={{ color: 'var(--maroon)', marginBottom: '1.5rem', fontSize: '1rem', letterSpacing: '0.05em' }}>NAMA BANK LIVE STATS</h2>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
-                                <Link to="/books" style={{ textDecoration: 'none', color: 'var(--gray-700)', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--cream-light)', padding: '0.75rem 1.5rem', borderRadius: '8px', transition: 'transform 0.2s' }} className="hover-lift">
-                                    <span style={{ fontWeight: 'bold', color: 'var(--maroon)', fontSize: '1.1rem' }}>{liveStats.totalBooks || 0}</span> Books added in Shelf.
-                                    <span style={{ color: 'var(--primary-color)', fontWeight: '600' }}>Click here to go to Book Shelf →</span>
-                                </Link>
-
-                                <Link to="/prayers" style={{ textDecoration: 'none', color: 'var(--gray-700)', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--cream-light)', padding: '0.75rem 1.5rem', borderRadius: '8px', transition: 'transform 0.2s' }} className="hover-lift">
-                                    <span style={{ fontWeight: 'bold', color: 'var(--maroon)', fontSize: '1.1rem' }}>{liveStats.totalPrayers || 0}</span> Prayers added.
-                                    <span style={{ color: 'var(--primary-color)', fontWeight: '600' }}>Click here to see the prayers →</span>
-                                </Link>
-                            </div>
-                        </div>
                     </div>
 
                     {/* Moderator & Admin Links */}

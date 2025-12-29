@@ -21,12 +21,15 @@ CREATE TABLE IF NOT EXISTS account_deletion_requests (
 ALTER TABLE account_deletion_requests ENABLE ROW LEVEL SECURITY;
 
 -- Allow public SELECT (so Admin can see requests)
+DROP POLICY IF EXISTS "Allow public read" ON account_deletion_requests;
 CREATE POLICY "Allow public read" ON account_deletion_requests FOR SELECT USING (true);
 
 -- Allow authenticated inserts (for moderators to create requests)
+DROP POLICY IF EXISTS "Allow insert" ON account_deletion_requests;
 CREATE POLICY "Allow insert" ON account_deletion_requests FOR INSERT WITH CHECK (true);
 
 -- Allow updates (for Admin to approve/reject)
+DROP POLICY IF EXISTS "Allow update" ON account_deletion_requests;
 CREATE POLICY "Allow update" ON account_deletion_requests FOR UPDATE USING (true);
 
 -- Admin: Delete Account directly

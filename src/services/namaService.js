@@ -729,3 +729,48 @@ export const rejectAccountDeletion = async (requestId) => {
     const { error } = await supabase.rpc('reject_account_deletion', { request_id: requestId });
     if (error) throw error;
 };
+
+// ============================================
+// User Deletion Requests (Moderator -> Admin)
+// ============================================
+
+export const requestUserDeletion = async (userId, moderatorId, reason) => {
+    const { data, error } = await supabase
+        .from('user_deletion_requests')
+        .insert({
+            user_id: userId,
+            requested_by: moderatorId,
+            reason,
+            status: 'pending'
+        })
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+};
+
+export const getPendingUserDeletionRequests = async () => {
+    const { data, error } = await supabase
+        .from('user_deletion_requests')
+        .select(`
+            *,
+            users (id, name, email, whatsapp),
+            moderators (id, name)
+        `)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+};
+
+export const approveUserDeletion = async (requestId) => {
+    const { error } = await supabase.rpc('approve_user_deletion', { request_id: requestId });
+    if (error) throw error;
+};
+
+export const rejectUserDeletion = async (requestId) => {
+    const { error } = await supabase.rpc('reject_user_deletion', { request_id: requestId });
+    if (error) throw error;
+};

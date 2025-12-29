@@ -175,6 +175,9 @@ const BookReaderPage = () => {
 
             // Fallback: If no outline found, generate a page list
             if (processedOutline.length === 0) {
+                // Try to get outline again with a different method if possible, or just fallback
+                // Sometimes outline is empty but there are named destinations
+                // For now, just fallback to page numbers
                 for (let i = 0; i < pdf.numPages; i++) {
                     processedOutline.push({
                         title: `Page ${i + 1}`,
@@ -187,6 +190,7 @@ const BookReaderPage = () => {
 
             const firstPage = await pdf.getPage(1);
             const viewport = firstPage.getViewport({ scale: 1 });
+            // Set dimensions based on the first page, but ensure it fits 2-page view
             setPageDimensions({ width: viewport.width, height: viewport.height });
         } catch (e) {
             console.error('Error getting PDF metadata:', e);
@@ -199,7 +203,10 @@ const BookReaderPage = () => {
 
     const jumpToPage = (pageNum) => {
         if (flipBookRef.current) {
-            flipBookRef.current.pageFlip().flip(pageNum);
+            // Ensure pageNum is valid
+            if (pageNum >= 0 && pageNum < numPages) {
+                flipBookRef.current.pageFlip().flip(pageNum);
+            }
         }
         setShowOutline(false);
     };
@@ -236,6 +243,7 @@ const BookReaderPage = () => {
 
         try {
             const results = [];
+            // Search all pages
             for (let i = 1; i <= numPages; i++) {
                 const page = await pdfDocument.getPage(i);
                 const textContent = await page.getTextContent();
@@ -249,6 +257,9 @@ const BookReaderPage = () => {
             if (results.length > 0) {
                 setCurrentSearchIndex(0);
                 jumpToPage(results[0]);
+            } else {
+                // Optional: Show no results message
+                // alert('No matches found');
             }
         } catch (err) {
             console.error('Search error:', err);
@@ -419,7 +430,6 @@ const BookReaderPage = () => {
                             <HTMLFlipBook
                                 width={currentWidth}
                                 height={currentHeight}
-                                size="fixed"
                                 startPage={currentPage}
                                 minWidth={315}
                                 maxWidth={1000}

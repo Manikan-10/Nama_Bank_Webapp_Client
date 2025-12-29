@@ -19,7 +19,10 @@ import {
     deleteBook,
     getPendingDeletionRequests,
     approveAccountDeletion,
-    rejectAccountDeletion
+    rejectAccountDeletion,
+    getPendingUserDeletionRequests,
+    approveUserDeletion,
+    rejectUserDeletion
 } from '../services/namaService';
 import { supabase } from '../supabaseClient';
 import ExcelUpload from '../components/ExcelUpload';
@@ -45,6 +48,7 @@ const AdminDashboardPage = () => {
 
     // Deletion Requests state
     const [deletionRequests, setDeletionRequests] = useState([]);
+    const [userDeletionRequests, setUserDeletionRequests] = useState([]);
 
     // Bulk selection state
     const [selectedUserIds, setSelectedUserIds] = useState([]);
@@ -80,14 +84,15 @@ const AdminDashboardPage = () => {
 
     const loadData = async () => {
         try {
-            const [accountsData, usersData, entriesData, statsData, prayersData, booksData, deletionRequestsData] = await Promise.all([
+            const [accountsData, usersData, entriesData, statsData, prayersData, booksData, deletionRequestsData, userDeletionRequestsData] = await Promise.all([
                 getAllNamaAccounts(),
                 getAllUsers(),
                 getAllNamaEntries(),
                 getAccountStats(),
                 getAllPrayers(),
                 getBooks(),
-                getPendingDeletionRequests()
+                getPendingDeletionRequests(),
+                getPendingUserDeletionRequests()
             ]);
             setAccounts(accountsData);
             setUsers(usersData);
@@ -96,6 +101,7 @@ const AdminDashboardPage = () => {
             setPrayers(prayersData);
             setBooks(booksData);
             setDeletionRequests(deletionRequestsData);
+            setUserDeletionRequests(userDeletionRequestsData);
 
             // Load moderators
             const { data: modsData } = await supabase.from('moderators').select('*').order('created_at', { ascending: false });
@@ -233,6 +239,31 @@ const AdminDashboardPage = () => {
         } catch (err) {
             console.error('Reject deletion error:', err);
             error(err.message || 'Failed to reject request');
+        }
+    };
+
+    // User Deletion Handlers
+    const handleApproveUserDeletion = async (requestId) => {
+        if (!confirm('Are you sure you want to approve this user deletion? The user will be permanently deleted.')) return;
+        try {
+            await approveUserDeletion(requestId);
+            success('User deleted successfully');
+            loadData();
+        } catch (err) {
+            console.error('Approve user deletion error:', err);
+            error(err.message || 'Failed to approve user deletion');
+        }
+    };
+
+    const handleRejectUserDeletion = async (requestId) => {
+        if (!confirm('Reject this user deletion request?')) return;
+        try {
+            await rejectUserDeletion(requestId);
+            success('User deletion request rejected');
+            loadData();
+        } catch (err) {
+            console.error('Reject user deletion error:', err);
+            error(err.message || 'Failed to reject user request');
         }
     };
 
@@ -626,7 +657,7 @@ const AdminDashboardPage = () => {
                                     {deletionRequests.length > 0 && (
                                         <div style={{ marginTop: '30px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
                                             <h3 style={{ color: 'var(--text-color)', marginBottom: '15px' }}>
-                                                Pending Deletion Requests ({deletionRequests.length})
+                                                Pending Account Deletion Requests ({deletionRequests.length})
                                             </h3>
                                             <div className="table-container">
                                                 <table className="table">
@@ -655,6 +686,52 @@ const AdminDashboardPage = () => {
                                                                         <button
                                                                             className="btn btn-sm btn-ghost"
                                                                             onClick={() => handleRejectAccountDeletion(req.id)}
+                                                                        >
+                                                                            Reject
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Pending User Deletion Requests Section */}
+                                    {userDeletionRequests.length > 0 && (
+                                        <div style={{ marginTop: '30px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
+                                            <h3 style={{ color: 'var(--text-color)', marginBottom: '15px' }}>
+                                                Pending User Deletion Requests ({userDeletionRequests.length})
+                                            </h3>
+                                            <div className="table-container">
+                                                <table className="table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>User Name</th>
+                                                            <th>Requested By</th>
+                                                            <th>Requested At</th>
+                                                            <th>Actions</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {userDeletionRequests.map(req => (
+                                                            <tr key={req.id}>
+                                                                <td><strong>{req.users?.name || 'Unknown'}</strong></td>
+                                                                <td>{req.moderators?.name || 'Unknown'}</td>
+                                                                <td>{formatDate(req.created_at)}</td>
+                                                                <td>
+                                                                    <div className="action-buttons">
+                                                                        <button
+                                                                            className="btn btn-sm btn-primary"
+                                                                            onClick={() => handleApproveUserDeletion(req.id)}
+                                                                        >
+                                                                            Approve
+                                                                        </button>
+                                                                        <button
+                                                                            className="btn btn-sm btn-ghost"
+                                                                            onClick={() => handleRejectUserDeletion(req.id)}
                                                                         >
                                                                             Reject
                                                                         </button>
