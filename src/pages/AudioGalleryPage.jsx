@@ -2,20 +2,13 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import './AudioGalleryPage.css';
 
-// Audio files - will be replaced with Cloudinary URLs
+// Audio files from Cloudinary
 const AUDIO_FILES = [
-    { id: 1, album: 'Nama Japa Collection', title: 'Yogi Ramsuratkumar Nama Japa - 1', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666688/01.VoiceofGod_tagpxh.mp3', duration: '3:45' },
-    { id: 2, album: 'Nama Japa Collection', title: 'Yogi Ramsuratkumar Nama Japa - 2', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666687/02.VoiceofGod_zdvkzf.mp3', duration: '4:12' },
-    { id: 3, album: 'Nama Japa Collection', title: 'Yogi Ramsuratkumar Nama Japa - 3', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666690/03.VoiceofGod_e18rxd.mp3', duration: '3:58' },
-    { id: 4, album: 'Nama Japa Collection', title: 'Yogi Ramsuratkumar Nama Japa - 4', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666693/06.SP1_qxu4yy.mp3', duration: '4:30' },
-    { id: 5, album: 'Nama Japa Collection', title: 'Yogi Ramsuratkumar Nama Japa - 5', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666692/07.SS1_jr59ev.mp3', duration: '3:22' },
-    { id: 6, album: 'Nama Japa Collection', title: 'Yogi Ramsuratkumar Nama Japa - 6', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666693/08.SP3_mv19yp.mp3', duration: '4:05' },
-    { id: 7, album: 'Nama Japa Collection', title: 'Yogi Ramsuratkumar Nama Japa - 7', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666694/09.SP4_v4xauk.mp3', duration: '3:50' },
-    { id: 8, album: 'Nama Japa Collection', title: 'Yogi Ramsuratkumar Nama Japa - 8', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666691/10.MA1_j2lr9g.mp3', duration: '4:15' },
-    { id: 9, album: 'Satsang Bhajans', title: 'Asatoma Sadgamaya', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666688/01.VoiceofGod_tagpxh.mp3', duration: '5:20' },
-    { id: 10, album: 'Satsang Bhajans', title: 'Om Namo Narayanaya', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666687/02.VoiceofGod_zdvkzf.mp3', duration: '4:45' },
-    { id: 11, album: 'Satsang Bhajans', title: 'Ringtone 1', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666690/03.VoiceofGod_e18rxd.mp3', duration: '0:30' },
-    { id: 12, album: 'Satsang Bhajans', title: 'Ringtone 2', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666693/06.SP1_qxu4yy.mp3', duration: '0:25' }
+    { id: 1, album: 'Nama Japa Collection', title: 'Amruthathara', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1767022775/Amruthathara_lcllo2.mp3', duration: '4:00' },
+    { id: 2, album: 'Nama Japa Collection', title: 'Bhagawans Voice', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1767022775/BhagawansVoice_nxegdl.mp3', duration: '3:45' },
+    { id: 3, album: 'Nama Japa Collection', title: 'Bhagawans Voice 2', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1767022774/BhagawansVoice2_uqmccp.mp3', duration: '3:50' },
+    { id: 4, album: 'Nama Japa Collection', title: 'Bhagawans Voice 3', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1767022775/BhagawansVoice3_hs7klo.mp3', duration: '4:10' },
+    { id: 5, album: 'Nama Japa Collection', title: 'Ma Devaki', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1767022775/MaDevaki_kdkcpe.mp3', duration: '3:30' }
 ];
 
 const ALBUMS = [
@@ -24,14 +17,7 @@ const ALBUMS = [
         description: 'Sacred chants of Yogi Ramsuratkumar',
         coverColor: '#FF9933',
         icon: '🕉️',
-        count: 8
-    },
-    {
-        title: 'Satsang Bhajans',
-        description: 'Devotional songs and bhajans',
-        coverColor: '#8B0000',
-        icon: '🎵',
-        count: 4
+        count: 5
     },
     {
         title: 'Spiritual Discourses',

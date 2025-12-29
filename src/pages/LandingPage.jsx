@@ -2,13 +2,17 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { getBooks, getApprovedPrayers } from '../services/namaService';
+import { useAuth } from '../context/AuthContext';
 import './LandingPage.css';
 
 const LandingPage = () => {
+    const { user, loading: authLoading } = useAuth();
     const [liveStats, setLiveStats] = useState({
         totalUsers: 0,
         totalNamaCount: 0,
-        activeAccounts: 0
+        activeAccounts: 0,
+        totalBooks: 0,
+        totalPrayers: 0
     });
     const [recentBooks, setRecentBooks] = useState([]);
     const [recentPrayers, setRecentPrayers] = useState([]);
@@ -26,7 +30,7 @@ const LandingPage = () => {
                 const { data: namaData } = await supabase
                     .from('nama_entries')
                     .select('count, account_id');
-                
+
                 const totalNama = namaData?.reduce((sum, entry) => sum + (entry.count || 0), 0) || 0;
 
                 // Get active accounts count (accounts with at least one entry)
@@ -135,27 +139,59 @@ const LandingPage = () => {
                             </span>
                         </Link>
 
-                        {/* Existing User Card */}
-                        <Link to="/login" className="landing-card hover-lift">
-                            <div className="card-icon-wrapper">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-                                    <polyline points="10 17 15 12 10 7" />
-                                    <line x1="15" y1="12" x2="3" y2="12" />
-                                </svg>
+                        {/* User State Card */}
+                        {authLoading ? (
+                            <div className="landing-card">
+                                <div className="card-icon-wrapper">
+                                    <div className="loader" style={{ width: '24px', height: '24px', border: '3px solid var(--saffron-light)', borderTopColor: 'var(--saffron-dark)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                                </div>
+                                <h2 className="card-title">Checking Status...</h2>
+                                <p className="card-description">Please wait while we verify your session</p>
                             </div>
-                            <h2 className="card-title">Continue Nama Offering</h2>
-                            <p className="card-description">
-                                Continue your daily Nama Japa and record your offering
-                            </p>
-                            <span className="card-action">
-                                Login
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="5" y1="12" x2="19" y2="12" />
-                                    <polyline points="12 5 19 12 12 19" />
-                                </svg>
-                            </span>
-                        </Link>
+                        ) : user ? (
+                            <Link to="/dashboard" className="landing-card hover-lift">
+                                <div className="card-icon-wrapper">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="3" y="3" width="7" height="7" />
+                                        <rect x="14" y="3" width="7" height="7" />
+                                        <rect x="14" y="14" width="7" height="7" />
+                                        <rect x="3" y="14" width="7" height="7" />
+                                    </svg>
+                                </div>
+                                <h2 className="card-title">Go to Dashboard</h2>
+                                <p className="card-description">
+                                    Welcome back, {user.name?.split(' ')[0]}! Continue your journey
+                                </p>
+                                <span className="card-action">
+                                    Dashboard
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="5" y1="12" x2="19" y2="12" />
+                                        <polyline points="12 5 19 12 12 19" />
+                                    </svg>
+                                </span>
+                            </Link>
+                        ) : (
+                            <Link to="/login" className="landing-card hover-lift">
+                                <div className="card-icon-wrapper">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                                        <polyline points="10 17 15 12 10 7" />
+                                        <line x1="15" y1="12" x2="3" y2="12" />
+                                    </svg>
+                                </div>
+                                <h2 className="card-title">Continue Nama Offering</h2>
+                                <p className="card-description">
+                                    Continue your daily Nama Japa and record your offering
+                                </p>
+                                <span className="card-action">
+                                    Login
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="5" y1="12" x2="19" y2="12" />
+                                        <polyline points="12 5 19 12 12 19" />
+                                    </svg>
+                                </span>
+                            </Link>
+                        )}
 
                         {/* Reports Card - Public */}
                         <Link to="/reports/public" className="landing-card hover-lift">
@@ -197,34 +233,116 @@ const LandingPage = () => {
                             </ul>
                         </div>
 
+
+                        {/* Featured Books Section */}
+                        {recentBooks.length > 0 && (
+                            <div className="landing-card" style={{ gridColumn: '1 / -1', background: 'var(--white)', overflow: 'hidden' }}>
+                                <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                                    <div>
+                                        <h2 className="card-title" style={{ color: 'var(--maroon)', marginBottom: '0.25rem' }}>LATEST EDITIONS</h2>
+                                        <p style={{ color: 'var(--gray-500)', fontSize: '0.9rem' }}>Read our monthly digital books</p>
+                                    </div>
+                                    <Link to="/books" style={{ color: 'var(--saffron-dark)', textDecoration: 'none', fontWeight: '600', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        View Library
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+                                    </Link>
+                                </div>
+
+                                <div className="featured-books-grid" style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                                    gap: '20px'
+                                }}>
+                                    {recentBooks.map(book => (
+                                        <Link to={`/books/${book.id}`} key={book.id} className="book-preview-card hover-lift" style={{
+                                            textDecoration: 'none',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            background: '#fcfcfc',
+                                            borderRadius: '8px',
+                                            padding: '12px',
+                                            border: '1px solid #eee'
+                                        }}>
+                                            <div style={{
+                                                height: '160px',
+                                                background: `linear-gradient(45deg, var(--saffron-light) 0%, #fff 100%)`,
+                                                borderRadius: '4px',
+                                                marginBottom: '10px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                position: 'relative',
+                                                boxShadow: '2px 2px 5px rgba(0,0,0,0.05)'
+                                            }}>
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    left: '10px',
+                                                    top: '0',
+                                                    bottom: '0',
+                                                    width: '4px',
+                                                    background: 'rgba(0,0,0,0.1)'
+                                                }}></div>
+                                                <span style={{ fontSize: '2rem' }}>📖</span>
+                                            </div>
+                                            <h4 style={{ color: 'var(--text-dark)', fontSize: '1rem', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{book.title}</h4>
+                                            <span style={{ color: 'var(--saffron-dark)', fontSize: '0.8rem', fontWeight: '500' }}>{book.month} {book.year}</span>
+                                        </Link>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Media Section Box */}
                         <div className="landing-card media-selection-card" style={{ gridColumn: '1 / -1', background: 'var(--white)' }}>
                             <div className="media-section-header" style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
                                 <h2 className="card-title" style={{ color: 'var(--maroon)' }}>MEDIA & DEVOTION</h2>
                                 <p style={{ color: 'var(--gray-500)' }}>Explore spiritual gallery and satsang audios</p>
                             </div>
-                            <div className="media-options-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                            <div className="media-options-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
                                 <Link to="/gallery" className="media-option hover-lift" style={{ textDecoration: 'none', padding: '20px', borderRadius: '12px', background: 'var(--cream-light)', border: '1px solid var(--saffron-light)', textAlign: 'center' }}>
                                     <div className="media-icon" style={{ color: 'var(--saffron-dark)', marginBottom: '10px', display: 'flex', justifyContent: 'center' }}>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                                             <circle cx="8.5" cy="8.5" r="1.5" />
                                             <polyline points="21 15 16 10 5 21" />
                                         </svg>
                                     </div>
-                                    <h3 style={{ color: 'var(--maroon)', marginBottom: '5px' }}>Photo Gallery</h3>
-                                    <p style={{ fontSize: '0.9rem', color: 'var(--gray-600)' }}>Devotional gallery & wallpapers</p>
+                                    <h3 style={{ color: 'var(--maroon)', marginBottom: '5px', fontSize: '1.1rem' }}>Gallery</h3>
+                                    <p style={{ fontSize: '0.85rem', color: 'var(--gray-600)' }}>Photos & Wallpapers</p>
                                 </Link>
                                 <Link to="/audios" className="media-option hover-lift" style={{ textDecoration: 'none', padding: '20px', borderRadius: '12px', background: 'var(--cream-light)', border: '1px solid var(--saffron-light)', textAlign: 'center' }}>
                                     <div className="media-icon" style={{ color: 'var(--saffron-dark)', marginBottom: '10px', display: 'flex', justifyContent: 'center' }}>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <path d="M9 18V5l12-2v13" />
                                             <circle cx="6" cy="18" r="3" />
                                             <circle cx="18" cy="16" r="3" />
                                         </svg>
                                     </div>
-                                    <h3 style={{ color: 'var(--maroon)', marginBottom: '5px' }}>Satsang Audios</h3>
-                                    <p style={{ fontSize: '0.9rem', color: 'var(--gray-600)' }}>Bhajans, discourses & albms</p>
+                                    <h3 style={{ color: 'var(--maroon)', marginBottom: '5px', fontSize: '1.1rem' }}>Audios</h3>
+                                    <p style={{ fontSize: '0.85rem', color: 'var(--gray-600)' }}>Satsang Bhajans</p>
+                                </Link>
+                                <Link to="/books" className="media-option hover-lift" style={{ textDecoration: 'none', padding: '20px', borderRadius: '12px', background: 'var(--cream-light)', border: '1px solid var(--saffron-light)', textAlign: 'center' }}>
+                                    <div className="media-icon" style={{ color: 'var(--saffron-dark)', marginBottom: '10px', display: 'flex', justifyContent: 'center' }}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                                        </svg>
+                                    </div>
+                                    <h3 style={{ color: 'var(--maroon)', marginBottom: '5px', fontSize: '1.1rem' }}>Library</h3>
+                                    <p style={{ fontSize: '0.85rem', color: 'var(--gray-600)' }}>{liveStats.totalBooks > 0 ? `${liveStats.totalBooks} Books` : 'Monthly Editions'}</p>
+                                </Link>
+                                <Link to="/prayers" className="media-option hover-lift" style={{ textDecoration: 'none', padding: '20px', borderRadius: '12px', background: 'var(--cream-light)', border: '1px solid var(--saffron-light)', textAlign: 'center' }}>
+                                    <div className="media-icon" style={{ color: 'var(--saffron-dark)', marginBottom: '10px', display: 'flex', justifyContent: 'center' }}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M7 11v-1a5 5 0 0 1 10 0v1" />
+                                            <path d="M5.5 13H4a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h1.5a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5z" />
+                                            <path d="M18.5 13H20a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-1.5a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5z" />
+                                            <path d="M12 18v2" />
+                                            <path d="M8 22h8" />
+                                        </svg>
+                                    </div>
+                                    <h3 style={{ color: 'var(--maroon)', marginBottom: '5px', fontSize: '1.1rem' }}>Prayers</h3>
+                                    <p style={{ fontSize: '0.85rem', color: 'var(--gray-600)' }}>{liveStats.totalPrayers > 0 ? `${liveStats.totalPrayers} Prayers` : 'Community'}</p>
                                 </Link>
                             </div>
                         </div>

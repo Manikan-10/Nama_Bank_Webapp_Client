@@ -52,11 +52,18 @@ const DashboardPage = () => {
             <header className="dashboard-header">
                 <div className="container">
                     <div className="header-content">
-                        <div className="header-left">
+                        <Link to="/" className="header-left" style={{ textDecoration: 'none', color: 'inherit' }}>
                             <span className="om-symbol-small">ॐ</span>
                             <h1>Nama Bank</h1>
-                        </div>
+                        </Link>
                         <div className="header-right">
+                            <Link to="/" className="btn btn-ghost btn-sm" style={{ marginRight: '10px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="19" y1="12" x2="5" y2="12" />
+                                    <polyline points="12 19 5 12 12 5" />
+                                </svg>
+                                Back to Home
+                            </Link>
                             <span className="user-name">{user.name}</span>
                             <button onClick={handleLogout} className="btn btn-ghost btn-sm">
                                 Logout
@@ -146,6 +153,20 @@ const DashboardPage = () => {
                                 </div>
                                 <h4>Nama Audio</h4>
                                 <p>Play audio and auto-count</p>
+                            </Link>
+
+                            <Link to="/prayers" className="action-card hover-lift">
+                                <div className="action-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M7 11v-1a5 5 0 0 1 10 0v1" />
+                                        <path d="M5.5 13H4a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h1.5a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5z" />
+                                        <path d="M18.5 13H20a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-1.5a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5z" />
+                                        <path d="M12 18v2" />
+                                        <path d="M8 22h8" />
+                                    </svg>
+                                </div>
+                                <h4>Prayer Community</h4>
+                                <p>Request & offer prayers</p>
                             </Link>
 
                             <Link to="/reports" className="action-card hover-lift">

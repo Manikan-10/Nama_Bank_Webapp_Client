@@ -5,16 +5,13 @@ import { useToast } from '../context/ToastContext';
 import { submitNamaEntry } from '../services/namaService';
 import './AudioPlayerPage.css';
 
-// 8 Audio files from Cloudinary
+// 5 Audio files from Cloudinary
 const AUDIO_FILES = [
-    { id: 1, title: 'Yogi Ramsuratkumar Nama Japa - 1', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666688/01.VoiceofGod_tagpxh.mp3' },
-    { id: 2, title: 'Yogi Ramsuratkumar Nama Japa - 2', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666687/02.VoiceofGod_zdvkzf.mp3' },
-    { id: 3, title: 'Yogi Ramsuratkumar Nama Japa - 3', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666690/03.VoiceofGod_e18rxd.mp3' },
-    { id: 4, title: 'Yogi Ramsuratkumar Nama Japa - 4', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666693/06.SP1_qxu4yy.mp3' },
-    { id: 5, title: 'Yogi Ramsuratkumar Nama Japa - 5', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666692/07.SS1_jr59ev.mp3' },
-    { id: 6, title: 'Yogi Ramsuratkumar Nama Japa - 6', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666693/08.SP3_mv19yp.mp3' },
-    { id: 7, title: 'Yogi Ramsuratkumar Nama Japa - 7', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666694/09.SP4_v4xauk.mp3' },
-    { id: 8, title: 'Yogi Ramsuratkumar Nama Japa - 8', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1765666691/10.MA1_j2lr9g.mp3' }
+    { id: 1, title: 'Amruthathara', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1767022775/Amruthathara_lcllo2.mp3' },
+    { id: 2, title: 'Bhagawans Voice', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1767022775/BhagawansVoice_nxegdl.mp3' },
+    { id: 3, title: 'Bhagawans Voice 2', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1767022774/BhagawansVoice2_uqmccp.mp3' },
+    { id: 4, title: 'Bhagawans Voice 3', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1767022775/BhagawansVoice3_hs7klo.mp3' },
+    { id: 5, title: 'Ma Devaki', src: 'https://res.cloudinary.com/dipqvcj8t/video/upload/v1767022775/MaDevaki_kdkcpe.mp3' }
 ];
 
 const AudioPlayerPage = () => {

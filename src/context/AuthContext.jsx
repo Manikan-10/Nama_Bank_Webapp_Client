@@ -224,8 +224,12 @@ export const AuthProvider = ({ children }) => {
 
     const requestPasswordReset = async (email) => {
         try {
+            // Use the production URL for the redirect link to ensure it always works 
+            // even if requested from localhost or test environments
+            const PRODUCTION_URL = 'https://nama-bank-webapp-client.vercel.app';
+
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: `${window.location.origin}/reset-password`,
+                redirectTo: `${PRODUCTION_URL}/reset-password`,
             });
 
             if (error) return { success: false, error: error.message };
