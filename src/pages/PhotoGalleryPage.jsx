@@ -1,49 +1,58 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import './PhotoGalleryPage.css';
 
-// Placeholder photos - will be replaced with Cloudinary URLs
-const GALLERY_PHOTOS = [
-    {
-        id: 1,
-        title: 'Divine Meditation',
-        url: 'https://res.cloudinary.com/dipqvcj8t/image/upload/v1765666688/devotional_1_1766771740611.png',
-        description: 'A serene meditative pose capturing spiritual peace.',
-        category: 'Devotional'
-    },
-    {
-        id: 2,
-        title: 'Eternal Flame',
-        url: 'https://res.cloudinary.com/dipqvcj8t/image/upload/v1765666687/devotional_2_1766771755978.png',
-        description: 'Traditional temple lamps glowing with divine light.',
-        category: 'Temple'
-    },
-    {
-        id: 3,
-        title: 'Bhajan Sandhya',
-        url: 'https://res.cloudinary.com/dipqvcj8t/image/upload/v1765666690/devotional_3_1766771772829.png',
-        description: 'Devotees coming together in joyful prayer.',
-        category: 'Devotional'
-    },
-    {
-        id: 4,
-        title: 'Sacred Wisdom',
-        url: 'https://res.cloudinary.com/dipqvcj8t/image/upload/v1765666693/devotional_4_1766771792362.png',
-        description: 'The Bhagavad Gita and prayer beads on a sacred altar.',
-        category: 'Scriptures'
-    }
-];
+// Base Cloudinary URL for transformations (optional, can be basic)
+const CLOUDINARY_BASE_URL = 'https://res.cloudinary.com/dipqvcj8t/image/upload';
+const CLOUDINARY_LIST_URL = 'https://res.cloudinary.com/dipqvcj8t/image/list/namabank_images.json';
 
 const CATEGORIES = ['All', 'Devotional', 'Temple', 'Scriptures', 'Wallpapers'];
 
 const PhotoGalleryPage = () => {
+    const [photos, setPhotos] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [selectedPhoto, setSelectedPhoto] = useState(null);
     const [activeCategory, setActiveCategory] = useState('All');
     const [downloading, setDownloading] = useState(null);
 
+    useEffect(() => {
+        const fetchPhotos = async () => {
+            try {
+                const response = await fetch(CLOUDINARY_LIST_URL);
+                if (!response.ok) throw new Error('Failed to fetch photos');
+
+                const data = await response.json();
+
+                // Transform Cloudinary resources to gallery format
+                const fetchedPhotos = data.resources.map((res, index) => {
+                    // Create a title from public_id (remove folder path and underscores)
+                    const titleRaw = res.public_id.split('/').pop().replace(/_/g, ' ').replace(/\d+\./, ''); // Removes sort numbers usually
+                    const title = titleRaw.charAt(0).toUpperCase() + titleRaw.slice(1);
+
+                    return {
+                        id: res.asset_id, // Use asset_id as unique key
+                        title: title || 'Divine Photo',
+                        url: `${CLOUDINARY_BASE_URL}/v${res.version}/${res.public_id}.${res.format}`,
+                        description: 'Divine glimpses & spiritual wallpapers.',
+                        category: 'Wallpapers' // Default category since we are fetching by tag
+                    };
+                });
+
+                setPhotos(fetchedPhotos);
+            } catch (error) {
+                console.error('Error fetching gallery:', error);
+                // Fallback can be empty or static list if needed
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchPhotos();
+    }, []);
+
     const filteredPhotos = activeCategory === 'All'
-        ? GALLERY_PHOTOS
-        : GALLERY_PHOTOS.filter(p => p.category === activeCategory);
+        ? photos
+        : photos.filter(p => p.category === activeCategory);
 
     const handleDownload = async (photo) => {
         setDownloading(photo.id);
@@ -53,7 +62,7 @@ const PhotoGalleryPage = () => {
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `${photo.title.replace(/\s+/g, '_')}.png`;
+            link.download = `${photo.title.replace(/\s+/g, '_')}.jpg`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -94,9 +103,14 @@ const PhotoGalleryPage = () => {
 
             {/* Gallery Grid */}
             <div className="gallery-grid">
-                {filteredPhotos.length === 0 ? (
+                {loading ? (
+                    <div className="loading-gallery">
+                        <div className="loader-sm" style={{ width: '40px', height: '40px', borderTopColor: '#8B0000', margin: '0 auto' }}></div>
+                        <p style={{ marginTop: '20px', color: '#666' }}>Loading divine images...</p>
+                    </div>
+                ) : filteredPhotos.length === 0 ? (
                     <div className="empty-gallery">
-                        <p>No photos in this category yet.</p>
+                        <p>No photos found in this category.</p>
                     </div>
                 ) : (
                     filteredPhotos.map(photo => (
@@ -116,7 +130,7 @@ const PhotoGalleryPage = () => {
                             </div>
                             <div className="photo-info">
                                 <h3>{photo.title}</h3>
-                                <span className="photo-category">{photo.category}</span>
+                                {/* <span className="photo-category">{photo.category}</span> */}
                                 <button
                                     className="download-btn"
                                     onClick={(e) => {
@@ -187,7 +201,7 @@ const PhotoGalleryPage = () => {
                         <line x1="12" y1="16" x2="12" y2="12" />
                         <line x1="12" y1="8" x2="12.01" y2="8" />
                     </svg>
-                    More photos will be added soon. Check back for updates!
+                    More photos will automatically appear here as they are added to the cloud.
                 </p>
             </div>
         </div>
